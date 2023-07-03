@@ -52,12 +52,10 @@ type ManagementCenterSpec struct {
 	Persistence *MCPersistenceConfiguration `json:"persistence,omitempty"`
 
 	// Scheduling details
-	// +kubebuilder:default:={}
 	// +optional
 	Scheduling *SchedulingConfiguration `json:"scheduling,omitempty"`
 
 	// Compute Resources required by the MC container.
-	// +kubebuilder:default:={}
 	// +optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 }
@@ -81,7 +79,6 @@ type HazelcastClusterConfig struct {
 	Address string `json:"address"`
 
 	// TLS client configuration.
-	// +kubebuilder:default:={}
 	// +optional
 	TLS *TLS `json:"tls,omitempty"`
 }

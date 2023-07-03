@@ -347,12 +347,10 @@ type JetEngineConfiguration struct {
 	RemoteFileConfiguration `json:",inline"`
 
 	// Jet Instance Configuration
-	// +kubebuilder:default:={}
 	// +optional
 	Instance *JetInstance `json:"instance,omitempty"`
 
 	// Jet Edge Defaults Configuration
-	// +kubebuilder:default:={}
 	// +optional
 	EdgeDefaults *JetEdgeDefaults `json:"edgeDefaults,omitempty"`
 }
@@ -627,12 +625,10 @@ type HazelcastPersistenceConfiguration struct {
 	DataRecoveryTimeout int32 `json:"dataRecoveryTimeout,omitempty"`
 
 	// Configuration of PersistenceVolumeClaim.
-	// +kubebuilder:default:={}
 	// +optional
 	Pvc PersistencePvcConfiguration `json:"pvc,omitempty"`
 
 	// Restore configuration
-	// +kubebuilder:default:={}
 	// +optional
 	Restore RestoreConfiguration `json:"restore,omitempty"`
 }
@@ -1081,7 +1077,6 @@ type HazelcastStatus struct {
 	Members []HazelcastMemberStatus `json:"members,omitempty"`
 
 	// Status of restore process of the Hazelcast cluster
-	// +kubebuilder:default:={}
 	// +optional
 	Restore RestoreStatus `json:"restore,omitempty"`
 }
