@@ -840,13 +840,13 @@ func (r *WanReplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *WanReplicationReconciler) wanRequestsForSuccessfulMap(m client.Object) []reconcile.Request {
-	r.Logger.V(util.DebugLevel).Info("wanRequestsForSuccessfulMap started")
+	r.Logger.V(util.DebugLevel).Info("wanRequestsForSuccessfulMap started", "map", m)
 
 	hzMap, ok := m.(*hazelcastv1alpha1.Map)
 	if !ok || hzMap.Status.State != hazelcastv1alpha1.MapSuccess {
 		return []reconcile.Request{}
 	}
-	r.Logger.V(util.DebugLevel).Info("wanRequestsForSuccessfulMap started 2")
+	r.Logger.V(util.DebugLevel).Info("wanRequestsForSuccessfulMap started 2", "map", hzMap.Name)
 
 	wanList := hazelcastv1alpha1.WanReplicationList{}
 	nsMatcher := client.InNamespace(hzMap.Namespace)
@@ -889,14 +889,14 @@ func (r *WanReplicationReconciler) wanRequestsForSuccessfulMap(m client.Object) 
 }
 
 func (r *WanReplicationReconciler) wanRequestsForTerminationCandidateMap(m client.Object) []reconcile.Request {
-	r.Logger.V(util.DebugLevel).Info("wanRequestsForTerminationCandidateMap started")
+	r.Logger.V(util.DebugLevel).Info("wanRequestsForTerminationCandidateMap started", "map", m)
 
 	mp, ok := m.(*hazelcastv1alpha1.Map)
 	if !ok {
-		r.Logger.V(util.DebugLevel).Info("wanRequestsForTerminationCandidateMap 1")
+		r.Logger.V(util.DebugLevel).Info("wanRequestsForTerminationCandidateMap 1", "map", m)
 		return []reconcile.Request{}
 	}
-	r.Logger.V(util.DebugLevel).Info("wanRequestsForTerminationCandidateMap 2")
+	r.Logger.V(util.DebugLevel).Info("wanRequestsForTerminationCandidateMap 2", "map", mp.Name)
 
 	if mp.Status.State != hazelcastv1alpha1.MapTerminating {
 		r.Logger.V(util.DebugLevel).Info("wanRequestsForTerminationCandidateMap 3")
