@@ -69,6 +69,7 @@ func NewWanReplicationReconciler(client client.Client, log logr.Logger, scheme *
 func (r *WanReplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := r.WithValues("name", req.Name, "namespace", req.NamespacedName, "seq", util.RandString(5))
 	ctx = context.WithValue(ctx, LogKey("logger"), logger)
+	logger.V(util.DebugLevel).Info("RECONCILE 1")
 
 	wan := &hazelcastv1alpha1.WanReplication{}
 	if err := r.Get(ctx, req.NamespacedName, wan); err != nil {
@@ -83,6 +84,7 @@ func (r *WanReplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, err
 		}
 	}
+	logger.V(util.DebugLevel).Info("RECONCILE 2")
 
 	if !controllerutil.ContainsFinalizer(wan, n.Finalizer) && wan.GetDeletionTimestamp().IsZero() {
 		logger.V(util.DebugLevel).Info("Finalizer added started")
@@ -96,6 +98,8 @@ func (r *WanReplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		logger.V(util.DebugLevel).Info("Finalizer added into custom resource successfully")
 		return ctrl.Result{}, nil
 	}
+
+	logger.V(util.DebugLevel).Info("RECONCILE 3")
 
 	if !wan.GetDeletionTimestamp().IsZero() {
 		updateWanStatus(ctx, r.Client, wan, recoptions.Empty(), withWanRepState(hazelcastv1alpha1.WanStatusTerminating)) //nolint:errcheck
@@ -836,10 +840,13 @@ func (r *WanReplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *WanReplicationReconciler) wanRequestsForSuccessfulMap(m client.Object) []reconcile.Request {
+	r.Logger.V(util.DebugLevel).Info("wanRequestsForSuccessfulMap started")
+
 	hzMap, ok := m.(*hazelcastv1alpha1.Map)
 	if !ok || hzMap.Status.State != hazelcastv1alpha1.MapSuccess {
 		return []reconcile.Request{}
 	}
+	r.Logger.V(util.DebugLevel).Info("wanRequestsForSuccessfulMap started 2")
 
 	wanList := hazelcastv1alpha1.WanReplicationList{}
 	nsMatcher := client.InNamespace(hzMap.Namespace)
@@ -851,6 +858,7 @@ func (r *WanReplicationReconciler) wanRequestsForSuccessfulMap(m client.Object) 
 	for _, wan := range wanList.Items {
 	wanResourcesLoop:
 		for _, wanResource := range wan.Spec.Resources {
+			r.Logger.V(util.DebugLevel).Info("wanRequestsForSuccessfulMap loop 1", "res", wanResource)
 			switch wanResource.Kind {
 			case hazelcastv1alpha1.ResourceKindMap:
 				if wanResource.Name == hzMap.Name {
@@ -860,6 +868,7 @@ func (r *WanReplicationReconciler) wanRequestsForSuccessfulMap(m client.Object) 
 							Namespace: wan.Namespace,
 						},
 					})
+					r.Logger.V(util.DebugLevel).Info("wanRequestsForSuccessfulMap loop break MAP", "res", wanResource)
 					break wanResourcesLoop
 				}
 			case hazelcastv1alpha1.ResourceKindHZ:
@@ -870,6 +879,7 @@ func (r *WanReplicationReconciler) wanRequestsForSuccessfulMap(m client.Object) 
 							Namespace: wan.Namespace,
 						},
 					})
+					r.Logger.V(util.DebugLevel).Info("wanRequestsForSuccessfulMap loop break HAZELCAST", "res", wanResource)
 					break wanResourcesLoop
 				}
 			}
@@ -879,17 +889,23 @@ func (r *WanReplicationReconciler) wanRequestsForSuccessfulMap(m client.Object) 
 }
 
 func (r *WanReplicationReconciler) wanRequestsForTerminationCandidateMap(m client.Object) []reconcile.Request {
+	r.Logger.V(util.DebugLevel).Info("wanRequestsForTerminationCandidateMap started")
+
 	mp, ok := m.(*hazelcastv1alpha1.Map)
 	if !ok {
+		r.Logger.V(util.DebugLevel).Info("wanRequestsForTerminationCandidateMap 1")
 		return []reconcile.Request{}
 	}
+	r.Logger.V(util.DebugLevel).Info("wanRequestsForTerminationCandidateMap 2")
 
 	if mp.Status.State != hazelcastv1alpha1.MapTerminating {
+		r.Logger.V(util.DebugLevel).Info("wanRequestsForTerminationCandidateMap 3")
 		return []reconcile.Request{}
 	}
 
 	// If map reconciler did not delete its finalizer yet
 	for _, finalizer := range mp.Finalizers {
+		r.Logger.V(util.DebugLevel).Info("wanRequestsForTerminationCandidateMap 4")
 		if finalizer == n.Finalizer {
 			return []reconcile.Request{}
 		}
@@ -897,7 +913,9 @@ func (r *WanReplicationReconciler) wanRequestsForTerminationCandidateMap(m clien
 
 	reqs := []reconcile.Request{}
 	for _, owner := range mp.OwnerReferences {
+		r.Logger.V(util.DebugLevel).Info("wanRequestsForTerminationCandidateMap 5")
 		if owner.Kind == "WanReplication" {
+			r.Logger.V(util.DebugLevel).Info("wanRequestsForTerminationCandidateMap 6")
 			reqs = append(reqs, reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      owner.Name,
