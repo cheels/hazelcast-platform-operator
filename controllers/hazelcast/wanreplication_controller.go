@@ -835,7 +835,32 @@ func (r *WanReplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				},
 			}),
 		).
-		Watches(&source.Kind{Type: &hazelcastv1alpha1.Map{}}, handler.EnqueueRequestsFromMapFunc(r.wanRequestsForTerminationCandidateMap)).
+		//Watches(&source.Kind{Type: &hazelcastv1alpha1.Map{}}, handler.EnqueueRequestsFromMapFunc(r.wanRequestsForTerminationCandidateMap)).
+		Watches(&source.Kind{Type: &hazelcastv1alpha1.Map{}}, handler.EnqueueRequestsFromMapFunc(r.wanRequestsForTerminationCandidateMap),
+			builder.WithPredicates(predicate.Funcs{
+				CreateFunc: func(createEvent event.CreateEvent) bool {
+					return false
+				},
+				UpdateFunc: func(updateEvent event.UpdateEvent) bool {
+					// to run handler 'wanRequestsForTerminationCandidateMap' function after the map is terminated
+					oldMap, ok := updateEvent.ObjectOld.(*hazelcastv1alpha1.Map)
+					if !ok {
+						return false
+					}
+					newMap, ok := updateEvent.ObjectNew.(*hazelcastv1alpha1.Map)
+					if !ok {
+						return false
+					}
+					return oldMap.Status.State != hazelcastv1alpha1.MapTerminating && newMap.Status.State == hazelcastv1alpha1.MapTerminating
+				},
+				DeleteFunc: func(deleteEvent event.DeleteEvent) bool {
+					return false
+				},
+				GenericFunc: func(genericEvent event.GenericEvent) bool {
+					return false
+				},
+			}),
+		).
 		Complete(r)
 }
 
@@ -927,3 +952,11 @@ func (r *WanReplicationReconciler) wanRequestsForTerminationCandidateMap(m clien
 
 	return reqs
 }
+
+//1.691498510989722e+09	ERROR	Reconciler error	{"controller": "wanreplication", "controllerGroup": "hazelcast.com", "controllerKind": "WanReplication", "WanReplication": {"name":"wan1hw-5-5h40ky","namespace":"default"}, "namespace": "default", "name": "wan1hw-5-5h40ky", "reconcileID": "a5660524-135b-4284-9235-35a38b81a7c2", "error": "Operation cannot be fulfilled on wanreplications.hazelcast.com \"wan1hw-5-5h40ky\": StorageError: invalid object, Code: 4, Key: /registry/hazelcast.com/wanreplications/default/wan1hw-5-5h40ky, ResourceVersion: 0, AdditionalErrorMsg: Precondition failed: UID in precondition: 439384ff-a203-40af-b6fa-2fbefa42e65b, UID in object meta: "}
+//sigs.k8s.io/controller-runtime/pkg/internal/controller.(*Controller).reconcileHandler
+//	/Users/cagriciftci/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.13.1/pkg/internal/controller/controller.go:326
+//sigs.k8s.io/controller-runtime/pkg/internal/controller.(*Controller).processNextWorkItem
+//	/Users/cagriciftci/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.13.1/pkg/internal/controller/controller.go:273
+//sigs.k8s.io/controller-runtime/pkg/internal/controller.(*Controller).Start.func2.2
+//	/Users/cagriciftci/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.13.1/pkg/internal/controller/controller.go:234
