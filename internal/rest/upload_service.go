@@ -77,6 +77,22 @@ func (s *UploadService) Cancel(ctx context.Context, uploadID uuid.UUID) (*http.R
 	return resp, nil
 }
 
+// Delete from bucket
+func (s *UploadService) DeleteFromBucket(ctx context.Context, uploadID string) (*http.Response, error) {
+	u := fmt.Sprintf("deletebucket/%v", uploadID)
+
+	req, err := s.client.NewRequest("DELETE", u, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := s.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+
+	return resp, nil
+}
 func (s *UploadService) Delete(ctx context.Context, uploadID uuid.UUID) (*http.Response, error) {
 	u := fmt.Sprintf("upload/%v", uploadID)
 

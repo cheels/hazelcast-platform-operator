@@ -110,6 +110,15 @@ func (u *Upload) Cancel(ctx context.Context) error {
 	return err
 }
 
+// Delete from bucket
+func (u *Upload) DeleteFromBucket(ctx context.Context, ID string) error {
+	if u.uploadID == nil {
+		return errUploadNotStarted
+	}
+	_, err := u.service.DeleteFromBucket(ctx, ID)
+	return err
+}
+
 func (u *Upload) Remove(ctx context.Context) error {
 	if u.uploadID == nil {
 		return errUploadNotStarted

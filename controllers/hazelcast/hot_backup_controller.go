@@ -350,9 +350,20 @@ func (r *HotBackupReconciler) startBackup(ctx context.Context, backupName types.
 				if errors.Is(err, context.Canceled) {
 					// notify agent so we can cleanup if needed
 					cancelErr := u.Cancel(ctx)
+
 					if cancelErr != nil {
 						return cancelErr
 					}
+					for _, uuid := range backupUUIDs {
+						if uuid != "" {
+							if err := u.DeleteFromBucket(ctx, uuid); err != nil {
+								//delete from successful backups hashmap
+								backupUUIDs[i] = ""
+								logger.Error(err, "Failed to remove finished upload task", "member", m.Address)
+							}
+						}
+					}
+
 					return fmt.Errorf("Upload error for member %s: %w", m.UUID, err)
 				}
 				return err
