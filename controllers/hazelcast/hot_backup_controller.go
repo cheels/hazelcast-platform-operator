@@ -283,6 +283,16 @@ func (r *HotBackupReconciler) startBackup(ctx context.Context, backupName types.
 		return r.updateStatus(ctx, backupName, recoptions.Error(err), withHotBackupFailedState(err.Error()))
 	}
 
+	//empty upload service holder
+	uploadServiceHolder, _ := upload.NewUpload(&upload.Config{
+		MemberAddress: "",
+		MTLSClient:    nil,
+		BucketURI:     "",
+		BackupBaseDir: "",
+		HazelcastName: "",
+		SecretName:    "",
+	})
+
 	backupUUIDs := make([]string, len(b.Members()))
 	// for each member monitor and upload backup if needed
 	g, groupCtx = errgroup.WithContext(ctx)
@@ -349,21 +359,14 @@ func (r *HotBackupReconciler) startBackup(ctx context.Context, backupName types.
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					// notify agent so we can cleanup if needed
-					cancelErr := u.Cancel(ctx)
+					//uploadServiceHolder is deep copy of u
+					uploadServiceHolder.SetConfig(u.GetConfig().DeepCopy())
+					fmt.Println("uploadServiceHolder", uploadServiceHolder.GetConfig().MemberAddress)
 
+					cancelErr := u.Cancel(ctx)
 					if cancelErr != nil {
 						return cancelErr
 					}
-					for _, uuid := range backupUUIDs {
-						if uuid != "" {
-							if err := u.DeleteFromBucket(ctx, uuid); err != nil {
-								//delete from successful backups hashmap
-								backupUUIDs[i] = ""
-								logger.Error(err, "Failed to remove finished upload task", "member", m.Address)
-							}
-						}
-					}
-
 					return fmt.Errorf("Upload error for member %s: %w", m.UUID, err)
 				}
 				return err
@@ -375,8 +378,22 @@ func (r *HotBackupReconciler) startBackup(ctx context.Context, backupName types.
 		})
 	}
 
+	//add delete all upload tasks at here
 	logger.Info("Waiting for members")
 	if err := g.Wait(); err != nil {
+		if errors.Is(err, context.Canceled) {
+			for i, uuid := range backupUUIDs {
+				if err := uploadServiceHolder.DeleteFromBucket(ctx, uuid); err != nil {
+					//delete from successful backups hashmap
+					logger.Error(err, "Failed to remove finished upload task", "member", b.Members()[i].Address)
+				}
+				backupUUIDs[i] = ""
+				if uuid == "" {
+					backupUUIDs = append(backupUUIDs[:i], backupUUIDs[i+1:]...)
+				}
+			}
+		}
+
 		logger.Error(err, "One or more members failed, returning first error")
 		return r.updateStatus(ctx, backupName, recoptions.Error(err),
 			withHotBackupFailedState(err.Error()))

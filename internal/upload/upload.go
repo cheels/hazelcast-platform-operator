@@ -126,3 +126,22 @@ func (u *Upload) Remove(ctx context.Context) error {
 	_, err := u.service.Delete(ctx, *u.uploadID)
 	return err
 }
+
+// deep copy
+func (c *Config) DeepCopy() *Config {
+	if c == nil {
+		return nil
+	}
+	clone := *c
+	return &clone
+}
+
+// get config
+func (u *Upload) GetConfig() *Config {
+	return u.config
+}
+
+// Set config
+func (u *Upload) SetConfig(config *Config) {
+	u.config = config
+}
