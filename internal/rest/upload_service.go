@@ -78,19 +78,22 @@ func (s *UploadService) Cancel(ctx context.Context, uploadID uuid.UUID) (*http.R
 }
 
 // Delete from bucket
-func (s *UploadService) DeleteFromBucket(ctx context.Context, uploadID string) (*http.Response, error) {
+func (s *UploadService) DeleteFromBucket(ctx context.Context, uploadID uuid.UUID) (*http.Response, error) {
 	u := fmt.Sprintf("deletebucket/%v", uploadID)
-
-	req, err := s.client.NewRequest("DELETE", u, nil)
+	fmt.Println("DeleteFromBucket: ", u)
+	req, err := s.client.NewRequest("POST", u, nil)
 	if err != nil {
+		fmt.Println("DeleteFromBucket: errors ", err)
 		return nil, err
 	}
 
 	resp, err := s.client.Do(ctx, req, nil)
 	if err != nil {
+		fmt.Println("DeleteFromBucket: response error ", err)
 		return resp, err
 	}
 
+	fmt.Println("deletebucket send response")
 	return resp, nil
 }
 func (s *UploadService) Delete(ctx context.Context, uploadID uuid.UUID) (*http.Response, error) {

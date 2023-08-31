@@ -112,10 +112,12 @@ func (u *Upload) Cancel(ctx context.Context) error {
 
 // Delete from bucket
 func (u *Upload) DeleteFromBucket(ctx context.Context, ID string) error {
-	if u.uploadID == nil {
-		return errUploadNotStarted
-	}
-	_, err := u.service.DeleteFromBucket(ctx, ID)
+	//adding log
+	fmt.Println("Deleting from bucket")
+
+	//convert ID to uuid
+	uu, _ := uuid.Parse(ID)
+	_, err := u.service.DeleteFromBucket(ctx, uu)
 	return err
 }
 
@@ -144,4 +146,9 @@ func (u *Upload) GetConfig() *Config {
 // Set config
 func (u *Upload) SetConfig(config *Config) {
 	u.config = config
+}
+
+// get uploadID
+func (u *Upload) GetUploadID() *uuid.UUID {
+	return u.uploadID
 }
