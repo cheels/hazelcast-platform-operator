@@ -175,6 +175,16 @@ func EncodeMapForStringAndString(message *proto.ClientMessage, values map[string
 	}
 	message.AddFrame(proto.EndFrame.Copy())
 }
+
+func EncodeMapForStringAndData(message *proto.ClientMessage, values map[string]iserialization.Data) {
+	message.AddFrame(proto.BeginFrame.Copy())
+	for key, value := range values {
+		EncodeString(message, key)
+		EncodeString(message, value)
+	}
+	message.AddFrame(proto.EndFrame.Copy())
+}
+
 func EncodeNullableMapForStringAndString(message *proto.ClientMessage, values map[string]string) {
 	if values == nil {
 		message.AddFrame(proto.NullFrame.Copy())
@@ -189,6 +199,18 @@ func DecodeMapForStringAndString(iterator *proto.ForwardFrameIterator) map[strin
 	for !iterator.PeekNext().IsEndFrame() {
 		key := DecodeString(iterator)
 		value := DecodeString(iterator)
+		result[key] = value
+	}
+	iterator.Next()
+	return result
+}
+
+func DecodeMapForStringAndData(iterator *proto.ForwardFrameIterator) map[string]iserialization.Data {
+	result := map[string]iserialization.Data{}
+	iterator.Next()
+	for !iterator.PeekNext().IsEndFrame() {
+		key := DecodeString(iterator)
+		value := DecodeData(iterator)
 		result[key] = value
 	}
 	iterator.Next()
@@ -344,4 +366,38 @@ func DecodeNullableForSqlSummary(it *proto.ForwardFrameIterator) (types.SqlSumma
 	}
 	ss := DecodeSqlSummary(it)
 	return ss, true
+}
+
+func DecodeListMultiFrameForDiscoveryStrategyConfig(frameIterator *proto.ForwardFrameIterator) []types.DiscoveryStrategyConfig {
+	var result []types.DiscoveryStrategyConfig
+	frameIterator.Next()
+	for !NextFrameIsDataStructureEndFrame(frameIterator) {
+		result = append(result, DecodeDiscoveryStrategyConfig(frameIterator))
+	}
+	frameIterator.Next()
+	return result
+}
+
+func EncodeListMultiFrameForDiscoveryStrategyConfig(message *proto.ClientMessage, values []types.DiscoveryStrategyConfig) {
+	message.AddFrame(proto.BeginFrame.Copy())
+	for i := 0; i < len(values); i++ {
+		EncodeDiscoveryStrategyConfig(message, values[i])
+	}
+	message.AddFrame(proto.EndFrame.Copy())
+}
+
+func EncodeListMultiFrameForWanCustomPublisherConfigHolder(message *proto.ClientMessage, values []types.WanCustomPublisherConfigHolder) {
+	message.AddFrame(proto.BeginFrame.Copy())
+	for i := 0; i < len(values); i++ {
+		EncodeWanCustomPublisherConfigHolder(message, values[i])
+	}
+	message.AddFrame(proto.EndFrame.Copy())
+}
+
+func EncodeListMultiFrameForWanBatchPublisherConfigHolder(message *proto.ClientMessage, values []types.WanBatchPublisherConfigHolder) {
+	message.AddFrame(proto.BeginFrame.Copy())
+	for i := 0; i < len(values); i++ {
+		EncodeWanBatchPublisherConfigHolder(message, values[i])
+	}
+	message.AddFrame(proto.EndFrame.Copy())
 }

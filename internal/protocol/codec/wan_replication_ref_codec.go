@@ -29,7 +29,8 @@ const (
 	WanReplicationRefCodecRepublishingEnabledInitialFrameSize = WanReplicationRefCodecRepublishingEnabledFieldOffset + proto.BooleanSizeInBytes
 )
 
-func EncodeWanReplicationRef(clientMessage *proto.ClientMessage, wanReplicationRef types.WanReplicationRef) {
+func EncodeWanReplicationRef(clientMessage *proto.ClientMessage, value interface{}) {
+	wanReplicationRef := value.(types.WanReplicationRef)
 	clientMessage.AddFrame(proto.BeginFrame.Copy())
 	initialFrame := proto.NewFrame(make([]byte, WanReplicationRefCodecRepublishingEnabledInitialFrameSize))
 	EncodeBoolean(initialFrame.Content, WanReplicationRefCodecRepublishingEnabledFieldOffset, wanReplicationRef.RepublishingEnabled)

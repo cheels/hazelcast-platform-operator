@@ -47,6 +47,14 @@ spec:
           spec:
             description: WanSyncSpec defines the desired state of WanSync
             properties:
+              consistencyCheckStrategy:
+                description: 'ConsistencyCheckStrategy sets the strategy for checking
+                  the consistency of data between the source and target clusters.
+                  When it is set to MERKLE_TREES, Delta WAN Sync is enabled: https://docs.hazelcast.com/hazelcast/latest/wan/advanced-features#using-delta-wan-synchronization'
+                enum:
+                - NONE
+                - MERKLE_TREES
+                type: string
               wanReplicationResourceName:
                 description: WanReplicationResourceName is the name of WanReplication
                   CR that contains the WAN publisher configuration. If specified the

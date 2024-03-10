@@ -11,6 +11,12 @@ type WanSyncSpec struct {
 	// +kubebuilder:validation:MinLength:=1
 	// +required
 	WanReplicationResourceName string `json:"wanReplicationResourceName"`
+
+	// ConsistencyCheckStrategy sets the strategy for checking the consistency of data between the source and target clusters.
+	// When it is set to MERKLE_TREES, Delta WAN Sync is enabled:
+	// https://docs.hazelcast.com/hazelcast/latest/wan/advanced-features#using-delta-wan-synchronization
+	// +optional
+	ConsistencyCheckStrategy ConsistencyCheckStrategy `json:"consistencyCheckStrategy,omitempty"`
 }
 
 type WanSyncPhase string
@@ -82,6 +88,17 @@ type WanSyncList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []WanSync `json:"items"`
 }
+
+// +kubebuilder:validation:Enum=NONE;MERKLE_TREES
+type ConsistencyCheckStrategy string
+
+const (
+	// No consistency checks
+	None ConsistencyCheckStrategy = "NONE"
+
+	// Uses merkle trees (if configured) for consistency checks.
+	MerkleTrees ConsistencyCheckStrategy = "MERKLE_TREES"
+)
 
 func init() {
 	SchemeBuilder.Register(&WanSync{}, &WanSyncList{})

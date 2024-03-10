@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"github.com/hazelcast/hazelcast-platform-operator/internal/protocol/codec"
+	codecTypes "github.com/hazelcast/hazelcast-platform-operator/internal/protocol/types"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -124,7 +126,25 @@ func (r *WanSyncReconciler) runWanSyncJobs(ctx context.Context, maps map[string]
 			return fmt.Errorf("failed to get Hazelcast CR for WAN Sync: %w", err)
 		}
 		logger.Info("Maps size", "size", len(mps))
+
+		if wan.Spec.ConsistencyCheckStrategy != "" {
+			cl, err := r.clientRegistry.GetOrCreate(ctx, types.NamespacedName{Name: h.Name, Namespace: h.Namespace})
+			if err != nil {
+				return err
+			}
+
+			err = r.ReconcileWanReplicationConfig(ctx, wr, wan, cl)
+			if err != nil {
+				return err
+			}
+		}
+
 		for _, m := range mps {
+			// if delta wan sync enabled but not configured on the current map, skip syncing it
+			if wan.Spec.ConsistencyCheckStrategy == hazelcastv1alpha1.MerkleTrees && m.Spec.MerkleTree == nil {
+				continue
+			}
+
 			mapWanKey := wanMapKey(hzResourceName, m.MapName())
 			if m.Status.State != hazelcastv1alpha1.MapSuccess {
 				logger.Info("Not running WAN Sync for ", "mapKey", mapWanKey, "because the map state is ", m.Status.State)
@@ -216,4 +236,67 @@ func (r *WanSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&hazelcastv1alpha1.WanSync{}).
 		Complete(r)
+}
+
+func (r *WanSyncReconciler) ReconcileWanReplicationConfig(
+	ctx context.Context, wr *hazelcastv1alpha1.WanReplication, ws *hazelcastv1alpha1.WanSync, cl hzclient.Client) error {
+	wrs := wr.Spec
+	wss := ws.Spec
+
+	var queueFullBehaviour int
+	switch wrs.Queue.FullBehavior {
+	case hazelcastv1alpha1.DiscardAfterMutation:
+		queueFullBehaviour = 0
+	case hazelcastv1alpha1.ThrowException:
+		queueFullBehaviour = 1
+	case hazelcastv1alpha1.ThrowExceptionOnlyIfReplicationActive:
+		queueFullBehaviour = 2
+	}
+
+	var ackType int
+	switch wrs.Acknowledgement.Type {
+	case hazelcastv1alpha1.AckOnReceipt:
+		ackType = 0
+	case hazelcastv1alpha1.AckOnOperationComplete:
+		ackType = 1
+	}
+
+	var consistencyCheckStrategy byte
+	switch wss.ConsistencyCheckStrategy {
+	case hazelcastv1alpha1.None:
+	case hazelcastv1alpha1.MerkleTrees:
+	}
+
+	batchPublisherConfigs := []codecTypes.WanBatchPublisherConfigHolder{
+		{
+			ClusterName:            "dev",
+			QueueCapacity:          int(wrs.Queue.Capacity),
+			BatchSize:              int(wrs.Batch.Size),
+			BatchMaxDelayMillis:    int(wrs.Batch.MaximumDelay),
+			QueueFullBehavior:      queueFullBehaviour,
+			AcknowledgeType:        ackType,
+			DiscoveryPeriodSeconds: 0,
+			SyncConfig: codecTypes.WanSyncConfig{
+				ConsistencyCheckStrategy: consistencyCheckStrategy,
+			},
+			Endpoint:        wrs.Endpoints,
+			DiscoveryConfig: codecTypes.DiscoveryConfig{},
+		},
+	}
+
+	req := codec.EncodeDynamicConfigAddWanReplicationConfigRequest(
+		wr.GetName(),
+		codecTypes.WanConsumerConfigHolder{},
+		[]codecTypes.WanCustomPublisherConfigHolder{},
+		batchPublisherConfigs,
+	)
+
+	for _, member := range cl.OrderedMembers() {
+		_, err := cl.InvokeOnMember(ctx, req, member.UUID, nil)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

@@ -39,4 +39,8 @@ func (v *wansyncValidator) validateNonUpdatableWanSyncFields(w *WanSync) {
 	if w.Spec.WanReplicationResourceName != lastSpec.WanReplicationResourceName {
 		v.Forbidden(Path("spec", "wanReplicationResourceName"), "field cannot be updated")
 	}
+
+	if w.Spec.ConsistencyCheckStrategy != "" && w.Spec.ConsistencyCheckStrategy != None && w.Spec.ConsistencyCheckStrategy != MerkleTrees {
+		v.Invalid(Path("spec", "consistencyCheckStrategy"), w.Spec.ConsistencyCheckStrategy, fmt.Sprintf("Can be MERKLE_TREES or NONE"))
+	}
 }
