@@ -23,7 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       RELEASE_VERSION: ${{ steps.setup-envs.outputs.RELEASE_VERSION }}
-      CONTAINER_IMAGE: ${{ steps.setup-envs.outputs.CONTAINER_IMAGE }}
+      CONTAINER_REPO: ${{ steps.setup-envs.outputs.CONTAINER_REPO }}
+      CONTAINER_TAG: ${{ steps.setup-envs.outputs.CONTAINER_TAG }}
       CONTAINER_IMAGE_DIGEST: ${{ steps.build-image.outputs.digest }}
       REFS: ${{ steps.setup-envs.outputs.ref }}
     env:
