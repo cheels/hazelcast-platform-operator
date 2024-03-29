@@ -18,12 +18,90 @@ env:
   AWS_REGION: us-east-1
 
 jobs:
-  migration-test:
+  migration_test:
     name: Run migration test
     runs-on: ubuntu-latest
+    outputs:
+      RELEASE_VERSION: ${{ steps.setup-envs.outputs.RELEASE_VERSION }}
+      CONTAINER_IMAGE: ${{ steps.setup-envs.outputs.CONTAINER_IMAGE }}
+      CONTAINER_IMAGE_DIGEST: ${{ steps.build-image.outputs.digest }}
+      REFS: ${{ steps.setup-envs.outputs.ref }}
     env:
       CLUSTER_NAME: kind
     steps:
+      - name: Checkout to hazelcast-operator
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4.0.2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get Secrets
+        uses: aws-actions/aws-secretsmanager-get-secrets@v2
+        with:
+          secret-ids: |
+            PFLT_PYXIS_API_TOKEN,CN/PREFLIGHT_RHEL_API_KEY
+            GKE_SA_KEY,CN/GKE_SA_KEY
+
+      - name: Set Environment Variables And Job Outputs
+        id: setup-envs
+        run: |
+          if [[ ${{ github.event_name == 'schedule' }} == true ]]; then
+              echo "RELEASE_VERSION=1.0.0" >> $GITHUB_ENV
+              echo "RELEASE_VERSION=1.0.0" >> $GITHUB_OUTPUT
+          elif [[ ${{ github.event_name == 'workflow_dispatch' }} == true ]]; then
+              CONTAINER_REPO=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/$(uuidgen)
+              CONTAINER_TAG=2d
+              CONTAINER_IMAGE=${CONTAINER_REPO}:${CONTAINER_TAG}
+              echo "CONTAINER_REPO=${CONTAINER_REPO}" >> $GITHUB_ENV
+              echo "CONTAINER_TAG=${CONTAINER_TAG}" >> $GITHUB_ENV
+              echo "CONTAINER_IMAGE=${CONTAINER_IMAGE}" >> $GITHUB_ENV
+              echo "RELEASE_VERSION=${{ github.event.inputs.RELEASE_VERSION }}" >> $GITHUB_ENV
+              echo "RELEASE_VERSION=${{ github.event.inputs.RELEASE_VERSION }}" >> $GITHUB_OUTPUT
+              echo "ref=refs/heads/${{ inputs.RELEASE_VERSION }}" >> $GITHUB_OUTPUT
+          fi
+              CONTAINER_REPO=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/$(uuidgen)
+              CONTAINER_TAG=2d
+              CONTAINER_IMAGE=${CONTAINER_REPO}:${CONTAINER_TAG}
+              echo "CONTAINER_IMAGE=${CONTAINER_IMAGE}" >> $GITHUB_ENV
+              echo "CONTAINER_IMAGE=${CONTAINER_IMAGE}" >> $GITHUB_OUTPUT
+
+      - name: Validate version
+        run: |
+          NUMBER='(0|[1-9][0-9]*)'
+          echo ${RELEASE_VERSION} | egrep "^$NUMBER.$NUMBER.$NUMBER?$"
+
+      - name: Set Up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v3.2.0
+        with:
+          install: true
+
+      - name: Authenticate to GAR
+        uses: docker/login-action@v3
+        with:
+          registry: us-east1-docker.pkg.dev
+          username: _json_key
+          password: ${{ env.GKE_SA_KEY }}
+
+      - name: Build Image
+        id: build-image
+        uses: docker/build-push-action@v5.3.0
+        with:
+          context: .
+          builder: ${{ steps.buildx.outputs.name }}
+          build-args: |
+            version=${{github.sha}}
+            pardotID=dockerhub
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.setup-envs.outputs.CONTAINER_IMAGE }}
+          cache-from: type=registry,ref=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/${{ hashFiles('Dockerfile','main.go','api/**','controllers/**','internal/**','licenses/**','**/go.mod','**/go.sum') }}:14d
+          cache-to: type=registry,ref=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/${{ hashFiles('Dockerfile','main.go','api/**','controllers/**','internal/**','licenses/**','**/go.mod','**/go.sum') }}:14d
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4.0.2
         with:
@@ -168,7 +246,7 @@ jobs:
           echo "Checking Management Center CR before upgrade"
           kubectl wait --for=jsonpath='{.status.phase}'=Running --timeout=300s ManagementCenter/managementcenter || (echo "Management Center CR Check Failed" && kubectl get managementcenters.hazelcast.com managementcenter -o wide; exit 1;)
           
-          helm upgrade operator hazelcast/hazelcast-platform-operator --version=$LATEST_VERSION --set=installCRDs=true --set=phoneHomeEnabled=false --wait
+          helm upgrade operator hazelcast/hazelcast-platform-operator --version=$LATEST_VERSION --set=installCRDs=true --set=phoneHomeEnabled=false --set image.repository=$CONTAINER_REPO --set image.tag=$CONTAINER_TAG --wait
           
           echo "Checking Operator Pod after upgrade"
           kubectl wait pods -l app.kubernetes.io/name=hazelcast-platform-operator --for condition=Ready --timeout=300s
@@ -185,29 +263,7 @@ jobs:
       run:
         shell: bash
     runs-on: ubuntu-latest
-    outputs:
-      RELEASE_VERSION: ${{ steps.setup-envs.outputs.RELEASE_VERSION }}
-      CONTAINER_IMAGE: ${{ steps.setup-envs.outputs.CONTAINER_IMAGE }}
-      CONTAINER_IMAGE_DIGEST: ${{ steps.build-image.outputs.digest }}
-      REFS: ${{ steps.setup-envs.outputs.ref }}
     steps:
-      - name: Checkout to hazelcast-operator
-        uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4.0.2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Get Secrets
-        uses: aws-actions/aws-secretsmanager-get-secrets@v2
-        with:
-          secret-ids: |
-            PFLT_PYXIS_API_TOKEN,CN/PREFLIGHT_RHEL_API_KEY
-            GKE_SA_KEY,CN/GKE_SA_KEY
-
       - name: Setup Preflight and Get Certification Project ID
         uses: redhat-actions/openshift-tools-installer@v1
         with:
@@ -215,58 +271,10 @@ jobs:
           source: github
           skip_cache: true
 
-      - name: Set Environment Variables And Job Outputs
-        id: setup-envs
-        run: |
-          if [[ ${{ github.event_name == 'schedule' }} == true ]]; then
-              echo "RELEASE_VERSION=1.0.0" >> $GITHUB_ENV
-              echo "RELEASE_VERSION=1.0.0" >> $GITHUB_OUTPUT
-          elif [[ ${{ github.event_name == 'workflow_dispatch' }} == true ]]; then
-              echo "RELEASE_VERSION=${{ github.event.inputs.RELEASE_VERSION }}" >> $GITHUB_ENV
-              echo "RELEASE_VERSION=${{ github.event.inputs.RELEASE_VERSION }}" >> $GITHUB_OUTPUT
-              echo "ref=refs/heads/${{ inputs.RELEASE_VERSION }}" >> $GITHUB_OUTPUT
-          fi
-              CONTAINER_IMAGE=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/$(uuidgen):5d
-              echo "CONTAINER_IMAGE=${CONTAINER_IMAGE}" >> $GITHUB_ENV
-              echo "CONTAINER_IMAGE=${CONTAINER_IMAGE}" >> $GITHUB_OUTPUT
-
-      - name: Validate version
-        run: |
-          NUMBER='(0|[1-9][0-9]*)'
-          echo ${RELEASE_VERSION} | egrep "^$NUMBER.$NUMBER.$NUMBER?$"
-
-      - name: Set Up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v3.2.0
-        with:
-          install: true
-
-      - name: Authenticate to GAR
-        uses: docker/login-action@v3
-        with:
-          registry: us-east1-docker.pkg.dev
-          username: _json_key
-          password: ${{ env.GKE_SA_KEY }}
-
-      - name: Build Image
-        id: build-image
-        uses: docker/build-push-action@v5.3.0
-        with:
-          context: .
-          builder: ${{ steps.buildx.outputs.name }}
-          build-args: |
-            version=${{github.sha}}
-            pardotID=dockerhub
-          file: Dockerfile
-          push: true
-          tags: ${{ steps.setup-envs.outputs.CONTAINER_IMAGE }}
-          cache-from: type=registry,ref=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/${{ hashFiles('Dockerfile','main.go','api/**','controllers/**','internal/**','licenses/**','**/go.mod','**/go.sum') }}:14d
-          cache-to: type=registry,ref=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/${{ hashFiles('Dockerfile','main.go','api/**','controllers/**','internal/**','licenses/**','**/go.mod','**/go.sum') }}:14d
-
       - name: Initiating a Container Scan
         run: |
           echo "Running the container scan tests"
-          preflight check container $CONTAINER_IMAGE --platform amd64
+          preflight check container ${{ needs.migration_test.outputs.CONTAINER_IMAGE }} --platform amd64
           grep -E -q "Preflight result: PASSED\"( |$)" preflight.log || exit 1
 
   openscap_image_scan:
@@ -276,7 +284,7 @@ jobs:
       run:
         shell: bash
     env:
-      CONTAINER_IMAGE: ${{ needs.test_container.outputs.CONTAINER_IMAGE }}
+      CONTAINER_IMAGE: ${{ needs.migration_test.outputs.CONTAINER_IMAGE }}
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS Credentials
@@ -340,9 +348,9 @@ jobs:
       run:
         shell: bash
     env:
-      CONTAINER_IMAGE: ${{ needs.test_container.outputs.CONTAINER_IMAGE }}
-      CONTAINER_IMAGE_DIGEST: ${{ needs.test_container.outputs.CONTAINER_IMAGE_DIGEST }}
-      RELEASE_VERSION: ${{ needs.test_container.outputs.RELEASE_VERSION }}
+      CONTAINER_IMAGE: ${{ needs.migration_test.outputs.CONTAINER_IMAGE }}
+      CONTAINER_IMAGE_DIGEST: ${{ needs.migration_test.outputs.CONTAINER_IMAGE_DIGEST }}
+      RELEASE_VERSION: ${{ needs.migration_test.outputs.RELEASE_VERSION }}
     outputs:
       BUNDLE_VERSION: ${{ steps.build-bundle-outputs.outputs.BUNDLE_VERSION }}
       BUNDLE_IMAGE: ${{ steps.build-bundle-outputs.outputs.BUNDLE_IMAGE }}
@@ -503,7 +511,7 @@ jobs:
       BUNDLE_VERSION: ${{ needs.build_bundle.outputs.BUNDLE_VERSION }}
 
   create_operator_tag:
-    if: needs.test_container.outputs.REFS == github.ref && github.ref != 'refs/heads/main'
+    if: needs.migration_test.outputs.REFS == github.ref && github.ref != 'refs/heads/main'
     needs: [ test_container, test_operator, community_operators_test_suite ]
     name: Create Operator Tag
     runs-on: ubuntu-latest
@@ -528,16 +536,16 @@ jobs:
 
       - name: Create a New Tag
         run: |
-          TAG_VERSION=v${{ needs.test_container.outputs.RELEASE_VERSION }}
+          TAG_VERSION=v${{ needs.migration_test.outputs.RELEASE_VERSION }}
           git tag ${TAG_VERSION}
           git push origin ${TAG_VERSION}
 
   publish_release:
-    if: needs.test_container.outputs.REFS == github.ref && github.ref != 'refs/heads/main'
-    needs: [migration-test, create_operator_tag, test_container, test_operator, community_operators_test_suite]
+    if: needs.migration_test.outputs.REFS == github.ref && github.ref != 'refs/heads/main'
+    needs: [migration_test, create_operator_tag, test_container, test_operator, community_operators_test_suite]
     uses: ./.github/workflows/publish-release.yaml
     with:
-      RELEASE_VERSION: ${{ needs.test_container.outputs.RELEASE_VERSION }}
+      RELEASE_VERSION: ${{ needs.migration_test.outputs.RELEASE_VERSION }}
     secrets: inherit
 
   clean_up_artifacts:
