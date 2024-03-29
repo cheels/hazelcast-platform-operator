@@ -256,6 +256,7 @@ jobs:
 
   test_container:
     name: Build and Test Container
+    needs: migration_test
     defaults:
       run:
         shell: bash
