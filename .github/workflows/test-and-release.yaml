@@ -46,6 +46,7 @@ jobs:
           secret-ids: |
             PFLT_PYXIS_API_TOKEN,CN/PREFLIGHT_RHEL_API_KEY
             GKE_SA_KEY,CN/GKE_SA_KEY
+            HZ_LICENSE_KEY,CN/HZ_LICENSE_KEY
 
       - name: Set Environment Variables And Job Outputs
         id: setup-envs
@@ -57,7 +58,9 @@ jobs:
               CONTAINER_REPO=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/$(uuidgen)
               CONTAINER_TAG=2d
               echo "CONTAINER_REPO=${CONTAINER_REPO}" >> $GITHUB_ENV
+              echo "CONTAINER_REPO=${CONTAINER_REPO}" >> $GITHUB_OUTPUT
               echo "CONTAINER_TAG=${CONTAINER_TAG}" >> $GITHUB_ENV
+              echo "CONTAINER_TAG=${CONTAINER_TAG}" >> $GITHUB_OUTPUT
               echo "RELEASE_VERSION=${{ github.event.inputs.RELEASE_VERSION }}" >> $GITHUB_ENV
               echo "RELEASE_VERSION=${{ github.event.inputs.RELEASE_VERSION }}" >> $GITHUB_OUTPUT
               echo "ref=refs/heads/${{ inputs.RELEASE_VERSION }}" >> $GITHUB_OUTPUT
@@ -101,19 +104,6 @@ jobs:
           tags: ${{ steps.setup-envs.outputs.CONTAINER_REPO }}:${{ steps.setup-envs.outputs.CONTAINER_TAG }}
           cache-from: type=registry,ref=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/${{ hashFiles('Dockerfile','main.go','api/**','controllers/**','internal/**','licenses/**','**/go.mod','**/go.sum') }}:14d
           cache-to: type=registry,ref=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/${{ hashFiles('Dockerfile','main.go','api/**','controllers/**','internal/**','licenses/**','**/go.mod','**/go.sum') }}:14d
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4.0.2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Get Secrets
-        uses: aws-actions/aws-secretsmanager-get-secrets@v2
-        with:
-          secret-ids: |
-            HZ_LICENSE_KEY,CN/HZ_LICENSE_KEY
 
       - name: Create Kind Config
         run: |
@@ -246,7 +236,7 @@ jobs:
           echo "Checking Management Center CR before upgrade"
           kubectl wait --for=jsonpath='{.status.phase}'=Running --timeout=300s ManagementCenter/managementcenter || (echo "Management Center CR Check Failed" && kubectl get managementcenters.hazelcast.com managementcenter -o wide; exit 1;)
           
-          helm upgrade operator hazelcast/hazelcast-platform-operator --version=$LATEST_VERSION --set=installCRDs=true --set=phoneHomeEnabled=false --set image.repository=$CONTAINER_REPO --set image.tag=$CONTAINER_TAG --wait
+          helm upgrade operator hazelcast/hazelcast-platform-operator --set=installCRDs=true --set=phoneHomeEnabled=false --set image.repository=$CONTAINER_REPO --set image.tag=$CONTAINER_TAG --wait
           
           echo "Checking Operator Pod after upgrade"
           kubectl wait pods -l app.kubernetes.io/name=hazelcast-platform-operator --for condition=Ready --timeout=300s
