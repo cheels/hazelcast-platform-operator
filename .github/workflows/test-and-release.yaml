@@ -55,19 +55,16 @@ jobs:
           elif [[ ${{ github.event_name == 'workflow_dispatch' }} == true ]]; then
               CONTAINER_REPO=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/$(uuidgen)
               CONTAINER_TAG=2d
-              CONTAINER_IMAGE=${CONTAINER_REPO}:${CONTAINER_TAG}
               echo "CONTAINER_REPO=${CONTAINER_REPO}" >> $GITHUB_ENV
               echo "CONTAINER_TAG=${CONTAINER_TAG}" >> $GITHUB_ENV
-              echo "CONTAINER_IMAGE=${CONTAINER_IMAGE}" >> $GITHUB_ENV
               echo "RELEASE_VERSION=${{ github.event.inputs.RELEASE_VERSION }}" >> $GITHUB_ENV
               echo "RELEASE_VERSION=${{ github.event.inputs.RELEASE_VERSION }}" >> $GITHUB_OUTPUT
               echo "ref=refs/heads/${{ inputs.RELEASE_VERSION }}" >> $GITHUB_OUTPUT
           fi
               CONTAINER_REPO=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/$(uuidgen)
               CONTAINER_TAG=2d
-              CONTAINER_IMAGE=${CONTAINER_REPO}:${CONTAINER_TAG}
-              echo "CONTAINER_IMAGE=${CONTAINER_IMAGE}" >> $GITHUB_ENV
-              echo "CONTAINER_IMAGE=${CONTAINER_IMAGE}" >> $GITHUB_OUTPUT
+              echo "CONTAINER_REPO=${CONTAINER_REPO}" >> $GITHUB_ENV
+              echo "CONTAINER_TAG=${CONTAINER_TAG}" >> $GITHUB_OUTPUT
 
       - name: Validate version
         run: |
@@ -98,7 +95,7 @@ jobs:
             pardotID=dockerhub
           file: Dockerfile
           push: true
-          tags: ${{ steps.setup-envs.outputs.CONTAINER_IMAGE }}
+          tags: ${{ steps.setup-envs.outputs.CONTAINER_REPO }}:${CONTAINER_TAG}
           cache-from: type=registry,ref=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/${{ hashFiles('Dockerfile','main.go','api/**','controllers/**','internal/**','licenses/**','**/go.mod','**/go.sum') }}:14d
           cache-to: type=registry,ref=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/${{ hashFiles('Dockerfile','main.go','api/**','controllers/**','internal/**','licenses/**','**/go.mod','**/go.sum') }}:14d
 
@@ -274,7 +271,7 @@ jobs:
       - name: Initiating a Container Scan
         run: |
           echo "Running the container scan tests"
-          preflight check container ${{ needs.migration_test.outputs.CONTAINER_IMAGE }} --platform amd64
+          preflight check container ${{ needs.migration_test.outputs.CONTAINER_REPO }}:${{ needs.migration_test.outputs.CONTAINER_TAG }} --platform amd64
           grep -E -q "Preflight result: PASSED\"( |$)" preflight.log || exit 1
 
   openscap_image_scan:
@@ -284,7 +281,7 @@ jobs:
       run:
         shell: bash
     env:
-      CONTAINER_IMAGE: ${{ needs.migration_test.outputs.CONTAINER_IMAGE }}
+      CONTAINER_IMAGE: ${{ needs.migration_test.outputs.CONTAINER_REPO }}:${{ needs.migration_test.outputs.CONTAINER_TAG }}
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS Credentials
@@ -348,7 +345,7 @@ jobs:
       run:
         shell: bash
     env:
-      CONTAINER_IMAGE: ${{ needs.migration_test.outputs.CONTAINER_IMAGE }}
+      CONTAINER_IMAGE: ${{ needs.migration_test.outputs.CONTAINER_REPO }}:${{ needs.migration_test.outputs.CONTAINER_TAG }}
       CONTAINER_IMAGE_DIGEST: ${{ needs.migration_test.outputs.CONTAINER_IMAGE_DIGEST }}
       RELEASE_VERSION: ${{ needs.migration_test.outputs.RELEASE_VERSION }}
     outputs:
