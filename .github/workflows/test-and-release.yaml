@@ -65,6 +65,8 @@ jobs:
               CONTAINER_REPO=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/$(uuidgen)
               CONTAINER_TAG=2d
               echo "CONTAINER_REPO=${CONTAINER_REPO}" >> $GITHUB_ENV
+              echo "CONTAINER_REPO=${CONTAINER_REPO}" >> $GITHUB_OUTPUT
+              echo "CONTAINER_TAG=${CONTAINER_TAG}" >> $GITHUB_ENV
               echo "CONTAINER_TAG=${CONTAINER_TAG}" >> $GITHUB_OUTPUT
 
       - name: Validate version
@@ -96,7 +98,7 @@ jobs:
             pardotID=dockerhub
           file: Dockerfile
           push: true
-          tags: ${{ steps.setup-envs.outputs.CONTAINER_REPO }}:2d
+          tags: ${{ steps.setup-envs.outputs.CONTAINER_REPO }}:${{ steps.setup-envs.outputs.CONTAINER_TAG }}
           cache-from: type=registry,ref=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/${{ hashFiles('Dockerfile','main.go','api/**','controllers/**','internal/**','licenses/**','**/go.mod','**/go.sum') }}:14d
           cache-to: type=registry,ref=${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REPO }}/${{ hashFiles('Dockerfile','main.go','api/**','controllers/**','internal/**','licenses/**','**/go.mod','**/go.sum') }}:14d
 
