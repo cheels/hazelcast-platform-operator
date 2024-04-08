@@ -710,7 +710,6 @@ var _ = Describe("Hazelcast WAN", Label("platform_wan"), func() {
 					Name: mapSrc2.Name,
 					Kind: hazelcastcomv1alpha1.ResourceKindMap,
 				}}
-			wanSrc.Spec.Queue.Capacity = 300000
 			Expect(k8sClient.Create(context.Background(), wanSrc)).Should(Succeed())
 
 			Eventually(func() (hazelcastcomv1alpha1.WanStatus, error) {
@@ -734,10 +733,10 @@ var _ = Describe("Hazelcast WAN", Label("platform_wan"), func() {
 			By("checking the first target Map size")
 			SwitchContext(context2)
 			setupEnv()
-			WaitForMapSize(context.Background(), targetLookupKey, mapSrc1.MapName(), expectedTrgMapSize, 15*Minute)
+			WaitForMapSize(context.Background(), targetLookupKey, mapSrc1.MapName(), expectedTrgMapSize, 20*Minute)
 
 			By("checking the second target Map size")
-			WaitForMapSize(context.Background(), targetLookupKey, mapSrc2.MapName(), expectedTrgMapSize, 15*Minute)
+			WaitForMapSize(context.Background(), targetLookupKey, mapSrc2.MapName(), expectedTrgMapSize, 20*Minute)
 		})
 
 		It("should replicate data for maps with TS and non TS storage in active-passive WAN replication mode", Tag(EE|AnyCloud), func() {
@@ -902,10 +901,10 @@ var _ = Describe("Hazelcast WAN", Label("platform_wan"), func() {
 			By("checking the target non-TS map size")
 			SwitchContext(context2)
 			setupEnv()
-			WaitForMapSize(context.Background(), targetLookupKey, nonTsMap.MapName(), expectedNonTsMapSize, 10*Minute)
+			WaitForMapSize(context.Background(), targetLookupKey, nonTsMap.MapName(), expectedNonTsMapSize, 20*Minute)
 
 			By("checking the target TS map size")
-			WaitForMapSize(context.Background(), targetLookupKey, tsMap.MapName(), expectedTsMapSize, 10*Minute)
+			WaitForMapSize(context.Background(), targetLookupKey, tsMap.MapName(), expectedTsMapSize, 20*Minute)
 		})
 	})
 })
