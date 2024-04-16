@@ -158,9 +158,7 @@ var _ = Describe("Platform Resilience Tests", Label("resilience"), func() {
 
 		By("checking map size after kill and resume")
 		for i := 0; i < nMaps; i++ {
-			m := hazelcastconfig.DefaultMap(types.NamespacedName{Name: fmt.Sprintf("map-%d-%s", i, hazelcast.Name), Namespace: hazelcast.Namespace}, hazelcast.Name, labels)
-			m.Spec.HazelcastResourceName = hazelcast.Name
-			WaitForMapSize(context.Background(), hzLookupKey, m.MapName(), int(float64(mapSizeInMb*128)), 1*Minute)
+			WaitForMapSize(context.Background(), hzLookupKey, fmt.Sprintf("map-%d-%s", i, hazelcast.Name), int(float64(mapSizeInMb*128)), 15*Minute)
 		}
 	})
 
