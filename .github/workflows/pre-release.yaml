@@ -45,6 +45,6 @@ jobs:
              git add .
              git commit --signoff -m "Update Hazelcast and MC version"
              git push -u origin "update-hz-and-mc-2"
-             gh pr create
+             gh pr create --title "Platform operator release" --body ""
              gh pr comment ${{ github.event.pull_request.number }} --body "/hold"
 
