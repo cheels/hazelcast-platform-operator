@@ -27,7 +27,9 @@ jobs:
 
       - name: Set the latest HZ and MC versions and Create Release Branch
         id: update_version
-        run: |          
+        run: |     
+          git config user.email "alexander.borschuk@gmail.com"
+          git config user.name "cheels"
           HZ_LATEST_TAG=5.5.0
           MC_LATEST_TAG=5.5.0
           sed -i '/Version of Hazelcast Platform\./{n; /^\s*$/! {s#// +kubebuilder:default:="\([0-9][^"]*\)"#// +kubebuilder:default:="'"$HZ_LATEST_TAG"'"#;};}' api/v1alpha1/hazelcast_types.go
@@ -40,9 +42,6 @@ jobs:
              git add .
              git commit --signoff -m "Update Hazelcast and MC version"
              git push -u origin "update-hz-and-mc"
-             gh pr create --fill \
-              --reviewer "hazelcast/cloud-native" \
-              --label "non-release" \
-              --milestone "${RELEASE_BRANCH}"  
+             gh pr create
              gh pr comment ${{ github.event.pull_request.number }} --body "/hold"
 
