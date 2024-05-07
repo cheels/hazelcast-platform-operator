@@ -41,10 +41,10 @@ jobs:
           sed -i 's/MCVersion = \".*\"/MCVersion = \"'$MC_LATEST_TAG'\"/' internal/naming/constants.go
           grep -rl 'kind: Hazelcast' config/samples | xargs sed -i -E -e 's/(version: ).*/\1'"'$HZ_LATEST_TAG'"'/'
              make sync-manifests
-             git checkout -b "update-hz-and-mc"
+             git checkout -b "update-hz-and-mc-2"
              git add .
              git commit --signoff -m "Update Hazelcast and MC version"
-             git push -u origin "update-hz-and-mc"
+             git push -u origin "update-hz-and-mc-2"
              gh pr create
              gh pr comment ${{ github.event.pull_request.number }} --body "/hold"
 
