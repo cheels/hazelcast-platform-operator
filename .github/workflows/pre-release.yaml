@@ -21,6 +21,9 @@ jobs:
         run: |
           NUMBER='(0|[1-9][0-9]*)'
           echo ${RELEASE_BRANCH} | egrep "^$NUMBER.$NUMBER.$NUMBER?$"
+          
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set the latest HZ and MC versions and Create Release Branch
         id: update_version
