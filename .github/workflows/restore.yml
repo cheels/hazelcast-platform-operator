@@ -1,0 +1,43 @@
+name: 'Deploy ASP.NET Core app to Azure Web App'
+
+on:
+  push:
+    branches:
+      - "main"
+
+env:
+  DOTNET_VERSION: '3.1.404'
+
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 'Hazelcast Operator' Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+  deploy-dev:
+    runs-on: 'ubuntu-latest'
+    environment: 'dev'
+    needs: build-and-publish
+    steps:
+      - name: Checkout 'Hazelcast Operator' Repository
+        uses: actions/checkout@v4
+
+  restore-publish:
+    name: Revert Release Changes?
+    runs-on: 'ubuntu-latest'
+    environment: 'openshift'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore the Helm Chart Index
+        if: always() && !contains(needs.deploy-dev.result, 'skipped')
+        run: |
+           echo "Restore the Helm Chart Index"
