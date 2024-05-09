@@ -27,9 +27,15 @@ jobs:
       - name: Checkout 'Hazelcast Operator' Repository
         uses: actions/checkout@v4
 
-  restore-publish:
-    name: Revert Release Changes?
+  validation:
+    name: Approve/Reject restoration?
     needs: [build-and-publish, deploy-dev]
+    runs-on: 'ubuntu-latest'
+    environment: 'openshift'
+
+  restore-publish:
+    name: Revert Release Changes
+    needs: [validation]
     runs-on: 'ubuntu-latest'
     environment: 'openshift'
     steps:
