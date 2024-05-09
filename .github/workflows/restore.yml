@@ -33,7 +33,7 @@ jobs:
 
   restore-publish:
     name: Revert Release Changes
-    if: always() && contains(needs.validate-release.result, 'failure')
+    if: needs.validate-release.result == 'failure'
     needs: [validate-release]
     runs-on: 'ubuntu-latest'
     environment: 'openshift'
