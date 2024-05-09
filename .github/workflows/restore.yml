@@ -33,11 +33,7 @@ jobs:
     runs-on: 'ubuntu-latest'
     environment: 'openshift'
     steps:
-      - name: Aprrove if successfull OR reject if you need to restore everything.
-        run: |
-           echo "Bundle PR's: \n
-           https://github.com/redhat-openshift-ecosystem/certified-operators/pull/3867 \n
-           https://github.com/k8s-operatorhub/community-operators/pull/4264"
+      - run: ""
 
 
   restore-publish:
