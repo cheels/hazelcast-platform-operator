@@ -14,10 +14,6 @@ jobs:
       - name: Checkout 'Hazelcast Operator' Repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET Core
-        uses: actions/setup-dotnet@v1
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
 
   deploy-dev:
     runs-on: 'ubuntu-latest'
