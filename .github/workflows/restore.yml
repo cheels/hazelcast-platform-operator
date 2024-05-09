@@ -29,7 +29,7 @@ jobs:
     runs-on: 'ubuntu-latest'
     environment: 'openshift'
     steps:
-      - name: Restore the Helm Chart Index
+      - run: ""
 
   restore-publish:
     name: Revert Release Changes
@@ -41,6 +41,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Restore the Helm Chart Index
+        if: always()
         run: |
            echo "Restore the Helm Chart Index"
 
