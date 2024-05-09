@@ -32,6 +32,9 @@ jobs:
     needs: [build-and-publish, deploy-dev]
     runs-on: 'ubuntu-latest'
     environment: 'openshift'
+    steps:
+      - name: Aprrove if release is successfull or reject if you need to restore everything.
+
 
   restore-publish:
     name: Revert Release Changes
