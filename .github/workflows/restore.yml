@@ -29,17 +29,10 @@ jobs:
     runs-on: 'ubuntu-latest'
     environment: 'openshift'
     steps:
-      - run: ""
-
-  restore-publish:
-    name: Revert Release Changes
-    needs: validate-release 
-    if: always() && needs.validate-release.result == 'failure'
-    runs-on: 'ubuntu-latest'
-    steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Restore the Helm Chart Index
         run: |
            echo "Restore the Helm Chart Index"
+
