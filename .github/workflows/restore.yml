@@ -27,15 +27,16 @@ jobs:
       - name: Checkout 'Hazelcast Operator' Repository
         uses: actions/checkout@v4
 
-  validation:
-    name: Approve/Reject restoration?
+  approve-release:
+    name: Approve/Reject release?
     needs: [build-and-publish, deploy-dev]
     runs-on: 'ubuntu-latest'
     environment: 'openshift'
 
   restore-publish:
     name: Revert Release Changes
-    needs: [validation]
+    if: contains(needs.approve-release.result, 'cancelled')
+    needs: [approve-release]
     runs-on: 'ubuntu-latest'
     environment: 'openshift'
     steps:
@@ -43,6 +44,5 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Restore the Helm Chart Index
-        if: always() && !contains(needs.deploy-dev.result, 'skipped')
         run: |
            echo "Restore the Helm Chart Index"
