@@ -27,19 +27,23 @@ jobs:
       - name: Checkout 'Hazelcast Operator' Repository
         uses: actions/checkout@v4
 
-  approve-release:
+  validate-release:
     name: Approve/Reject release?
     needs: [build-and-publish, deploy-dev]
     runs-on: 'ubuntu-latest'
     environment: 'openshift'
     steps:
-      - name: Aprrove if release is successfull or reject if you need to restore everything.
+      - name: Aprrove if successfull OR reject if you need to restore everything.
+        run: |
+           echo "Bundle PR's: \n
+           https://github.com/redhat-openshift-ecosystem/certified-operators/pull/3867 \n
+           https://github.com/k8s-operatorhub/community-operators/pull/4264"
 
 
   restore-publish:
     name: Revert Release Changes
-    if: contains(needs.approve-release.result, 'cancelled')
-    needs: [approve-release]
+    if: contains(needs.validate-release.result, 'cancelled')
+    needs: [validate-release]
     runs-on: 'ubuntu-latest'
     environment: 'openshift'
     steps:
