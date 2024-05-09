@@ -34,7 +34,7 @@ jobs:
   restore-publish:
     name: Revert Release Changes
     needs: validate-release 
-    if: always() && needs.validate-release.result == 'failure'
+    if: needs.validate-release.result == 'failure'
     runs-on: 'ubuntu-latest'
     steps:
       - name: Checkout
