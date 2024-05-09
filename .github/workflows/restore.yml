@@ -36,7 +36,6 @@ jobs:
     needs: validate-release 
     if: always() && needs.validate-release.result == 'failure'
     runs-on: 'ubuntu-latest'
-    environment: 'openshift'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
