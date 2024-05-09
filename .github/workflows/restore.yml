@@ -1,9 +1,7 @@
 name: 'Deploy ASP.NET Core app to Azure Web App'
 
 on:
-  push:
-    branches:
-      - "main"
+  workflow_dispatch:
 
 env:
   DOTNET_VERSION: '3.1.404'
@@ -31,6 +29,7 @@ jobs:
 
   restore-publish:
     name: Revert Release Changes?
+    needs: [build-and-publish, deploy-dev]
     runs-on: 'ubuntu-latest'
     environment: 'openshift'
     steps:
