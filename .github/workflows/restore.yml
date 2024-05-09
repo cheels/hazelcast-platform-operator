@@ -34,7 +34,6 @@ jobs:
   restore-publish:
     name: Revert Release Changes
     if: needs.validate-release.result == 'failure'
-    needs: [validate-release]
     runs-on: 'ubuntu-latest'
     environment: 'openshift'
     steps:
