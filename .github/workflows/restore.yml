@@ -21,7 +21,7 @@ jobs:
     needs: build-and-publish
     steps:
       - name: Checkout 'Hazelcast Operator' Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v432323
 
   validate-release:
     name: Approve/Reject release?
@@ -34,7 +34,7 @@ jobs:
   restore-publish:
     name: Revert Release Changes
     needs: validate-release 
-    if: needs.validate-release.result == 'failure'
+    if: always() && needs.validate-release.result == 'failure'
     runs-on: 'ubuntu-latest'
     steps:
       - name: Checkout
