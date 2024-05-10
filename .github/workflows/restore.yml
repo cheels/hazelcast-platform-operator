@@ -25,6 +25,7 @@ jobs:
 
   validate-release:
     name: Approve/Reject release?
+    if: always()
     needs: [build-and-publish, deploy-dev]
     runs-on: 'ubuntu-latest'
     environment: 'openshift'
