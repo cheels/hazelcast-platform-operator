@@ -46,6 +46,9 @@ jobs:
         run: |
           BRANCH_NAME=${OPERATOR_NAME}-${BUNDLE_RELEASE_VERSION}-${{ github.run_id }}
           git checkout -b $BRANCH_NAME
+          if [ "${{ env.REPO_NAME }}" == "certified-operators" ]; then
+            sed -i "s|merge: *[^ ]*|merge: false|" operators/${OPERATOR_NAME}/ci.yaml
+          fi
           git push -u origin $BRANCH_NAME
 
   validate-release:
@@ -102,6 +105,7 @@ jobs:
         if: ${{ matrix.repo-name }} != 'hazelcast-platform-operator'
         working-directory: ${{ env.REPO_NAME }}
         run: |
+          echo ${{ secrets.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
           BRANCH_NAME=${OPERATOR_NAME}-${BUNDLE_RELEASE_VERSION}-${{ github.run_id }}
           PR_NUMBER=$(gh pr list --repo ${{ env.REPO_OWNER }}/${{ env.REPO_NAME }} --search "operator ${{ env.OPERATOR_NAME }} (${BUNDLE_RELEASE_VERSION})" --json number | jq -r '.[].number')
           if [ "${{ env.REPO_NAME }} == "certified-operators" ]; then
