@@ -44,7 +44,7 @@ jobs:
         run: |
           echo ${{ secrets.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
           gh pr create --title "Update Helm Chart Version to ${REPLACED_VERSION}-snapshot" \
-          --base main \
+          --repo cheels/hazelcast-platform-operator \
           --label "non-release" \
           --milestone "${RELEASE_VERSION}" \
           --body ""
@@ -218,5 +218,5 @@ jobs:
           for REPO in "cheels/certified-operators" "cheels/community-operators" "cheels/community-operators-prod" "cheels/hazelcast-platform-operator"; do   
              git push origin --delete $BRANCH_NAME
           done
-            gh pr close $HELM_CHART_PR_NUMBER--repo cheels/hazelcast-platform-operator --delete-branch 2>/dev/null
+             close $HELM_CHART_PR_NUMBER--repo cheels/hazelcast-platform-operator --delete-branch 2>/dev/null
 
