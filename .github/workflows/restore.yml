@@ -150,6 +150,8 @@ jobs:
           git config user.name "cheels"
           echo ${{ secrets.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
           if [ "${{ env.REPO_NAME }}" == "certified-operators" ]; then
+              BRANCH_NAME=${OPERATOR_NAME}-${BUNDLE_RELEASE_VERSION}-${{ github.run_id }}
+              git checkout $BRANCH_NAME
               sed -i "s|merge: *[^ ]*|merge: true|" operators/${OPERATOR_NAME}/ci.yaml
               git commit --signoff -m "Enable auto-merge"
               git push -u origin $BRANCH_NAME
