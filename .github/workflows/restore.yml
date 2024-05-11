@@ -39,7 +39,7 @@ jobs:
         with:
           repository: cheels/${{ env.REPO_NAME }}
           path: ${{ env.REPO_NAME }}
-          token: ${{ env.DEVOPS_GITHUB_TOKEN }}
+          token: ${{ secrets.DEVOPS_GITHUB_TOKEN }}
         
       - name: Create branch
         working-directory: ${{ env.REPO_NAME }}
@@ -87,7 +87,7 @@ jobs:
         with:
           repository: cheels/${{ env.REPO_NAME }}
           path: ${{ env.REPO_NAME }}
-          token: ${{ env.DEVOPS_GITHUB_TOKEN }}
+          token: ${{ secrets.DEVOPS_GITHUB_TOKEN }}
 
       - name: Update main branch of the fork
         if: ${{ matrix.repo-name }} != 'hazelcast-platform-operator'
@@ -121,7 +121,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.REPO_OWNER }}/${{ env.REPO_NAME }}
-          token: ${{ env.DEVOPS_GITHUB_TOKEN }}
+          token: ${{ secrets.DEVOPS_GITHUB_TOKEN }}
 
       - name: Merge Helm Chart PR
         working-directory: ${{ env.REPO_NAME }}
