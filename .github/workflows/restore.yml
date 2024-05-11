@@ -44,7 +44,8 @@ jobs:
       - name: Create branch
         working-directory: ${{ env.REPO_NAME }}
         run: |
-          echo ${{ secrets.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
+          git config user.email "alexander.borschuk@hazelcast.com"
+          git config user.name "cheels"
           BRANCH_NAME=${OPERATOR_NAME}-${BUNDLE_RELEASE_VERSION}-${{ github.run_id }}
           git checkout -b $BRANCH_NAME
           if [ "${{ env.REPO_NAME }}" == "certified-operators" ]; then
