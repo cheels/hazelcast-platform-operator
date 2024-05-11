@@ -71,7 +71,7 @@ jobs:
       HELM_CHART_PR_NUMBER: ${{ needs.helm_chart_release.outputs.HELM_CHART_PR_NUMBER }}
     steps:
       - name: Checkout to cheels/${{ env.REPO_NAME }}
-        if: matrix.repo-name != hazelcast-platform-operator
+        if: matrix.repo-name != 'hazelcast-platform-operator'
         uses: actions/checkout@v4
         with:
           repository: cheels/${{ env.REPO_NAME }}
