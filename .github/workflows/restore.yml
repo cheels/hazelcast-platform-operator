@@ -14,23 +14,110 @@ jobs:
       - name: Checkout 'Hazelcast Operator' Repository
         uses: actions/checkout@v4
 
-
   deploy-dev:
     runs-on: 'ubuntu-latest'
-    environment: 'dev'
     needs: build-and-publish
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - repo-name: community-operators
+            repo-owner: cheels
+
+          - repo-name: certified-operators
+            repo-owner: cheels
+
+          - repo-name: community-operators-prod
+            repo-owner: cheels
     steps:
-      - name: Checkout 'Hazelcast Operator' Repository
-        uses: actions/checkout@v432323
+      - name: Checkout to cheels/${{ env.REPO_NAME }}
+        uses: actions/checkout@v4
+        with:
+          repository: cheels/${{ env.REPO_NAME }}
+          path: ${{ env.REPO_NAME }}
+        
+      - name: Create branch
+        run: |
+          git config user.email "alexander.borschuk@gmail.com"
+          git config user.name "cheels"
+          BRANCH_NAME=${OPERATOR_NAME}-${BUNDLE_RELEASE_VERSION}-${{ github.run_id }}
+          git checkout -b $BRANCH_NAME
+          git push -u origin $BRANCH_NAME
 
   validate-release:
-    name: Approve/Reject release?
     if: always()
-    needs: [build-and-publish, deploy-dev]
-    runs-on: 'ubuntu-latest'
-    environment: 'openshift'
+    name: Approve/Reject release?
+    needs: ['build-and-publish', 'deploy-dev']
+    runs-on: ubuntu-latest
+    environment: 'prod'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - repo-name: community-operators
+            repo-owner: k8s-operatorhub
+
+          - repo-name: certified-operators
+            repo-owner: redhat-openshift-ecosystem
+
+          - repo-name: community-operators-prod
+            repo-owner: redhat-openshift-ecosystem
+            
+          - repo-name: hazelcast-platform-operator
+            repo-owner: hazelcast
+    env:
+      REPO_NAME: ${{ matrix.repo-name }}
+      REPO_OWNER: ${{ matrix.repo-owner }}
+      HELM_CHART_PR_NUMBER: ${{ needs.helm_chart_release.outputs.HELM_CHART_PR_NUMBER }}
     steps:
-      - run: ""
+      - name: Checkout to cheels/${{ env.REPO_NAME }}
+        if: matrix.repo-name != "hazelcast-platform-operator"
+        uses: actions/checkout@v4
+        with:
+          repository: cheels/${{ env.REPO_NAME }}
+          path: ${{ env.REPO_NAME }}
+          token: ${{ env.DEVOPS_GITHUB_TOKEN }}
+
+      - name: Update main branch of the fork
+        if: matrix.repo-name != "hazelcast-platform-operator"
+        working-directory: ${{ env.REPO_NAME }}
+        run: |
+          git checkout main
+          git remote add upstream https://github.com/${REPO_OWNER}/${REPO_NAME}.git
+          git pull upstream main
+          git push origin main
+
+      - name: Enable Auto-Merge For PR's
+        if: matrix.repo-name != "hazelcast-platform-operator"
+        run: |
+          echo ${{ env.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
+          BRANCH_NAME=${OPERATOR_NAME}-${BUNDLE_RELEASE_VERSION}-${{ github.run_id }}
+          PR_NUMBER=$(gh pr list --repo ${{ env.REPO_OWNER }}/${{ env.REPO_NAME }} --search "operator ${{ env.OPERATOR_NAME }} (${BUNDLE_RELEASE_VERSION})" --json number | jq -r '.[].number')
+          if [ "${{ env.REPO_NAME }} == "certified-operators" ]; then
+              git checkout $BRANCH_NAME
+              sed -i "s|merge: *[^ ]*|merge: true|" operators/${OPERATOR_NAME}/ci.yaml
+              git add  ./operators/${OPERATOR_NAME}
+              git commit --signoff -m "Update ${OPERATOR_NAME} to ${BUNDLE_RELEASE_VERSION}"
+              git push -u origin $BRANCH_NAME
+            elif [ "${{ env.REPO_NAME }}" != "certified-operators" ]; then
+              #gh pr comment $PR_NUMBER --body "/hold cancel"
+              echo "PR comment"
+            fi
+          done
+
+      - name: Checkout to cheels/hazelcast-platform-operator
+        if: matrix.repo-name == "hazelcast-platform-operator"
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.REPO_OWNER }}/${{ env.REPO_NAME }}
+          token: ${{ env.DEVOPS_GITHUB_TOKEN }}
+
+      - name: Merge Helm Chart PR
+        if: matrix.repo-name == "hazelcast-platform-operator"
+        run: |
+          #echo ${{ env.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
+          #gh pr merge $HELM_CHART_PR_NUMBER --admin
+          echo "PR merge"
 
   restore-publish:
     name: Revert Release Changes
