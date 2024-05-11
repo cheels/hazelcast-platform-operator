@@ -147,11 +147,9 @@ jobs:
         working-directory: ${{ env.REPO_NAME }}
         run: |
           echo ${{ secrets.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
-          BRANCH_NAME=${OPERATOR_NAME}-${BUNDLE_RELEASE_VERSION}-${{ github.run_id }}
           if [ "${{ env.REPO_NAME }}" == "certified-operators" ]; then
-              git checkout $BRANCH_NAME
               sed -i "s|merge: *[^ ]*|merge: true|" operators/${OPERATOR_NAME}/ci.yaml
-              git commit --signoff -m "Update ${OPERATOR_NAME} to ${BUNDLE_RELEASE_VERSION}"
+              git commit --signoff -m "Enable auto-merge"
               git push -u origin $BRANCH_NAME
           else 
               echo "PR comment"
@@ -166,7 +164,6 @@ jobs:
 
       - name: Merge Helm Chart PR
         if: matrix.repo-name == 'hazelcast-platform-operator'
-        working-directory: ${{ env.REPO_NAME }}
         run: |
           echo ${{ secrets.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
           echo "gh pr merge"
