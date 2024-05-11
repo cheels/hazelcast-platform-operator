@@ -4,14 +4,15 @@ on:
   workflow_dispatch:
 
 env:
-  DOTNET_VERSION: '3.1.404'
   OPERATOR_NAME: "hazelcast-platform-operator"
-  BUNDLE_RELEASE_VERSION: 5.13.0
-  RELEASE_VERSION: 5.13.0
+  BUNDLE_RELEASE_VERSION: 5.14.0
+  RELEASE_VERSION: 5.14.0
 
 jobs:
   helm_chart_release:
     runs-on: ubuntu-latest
+    outputs:
+      HELM_CHART_PR_NUMBER: ${{ steps.helm_chart_pr.outputs.HELM_CHART_PR_NUMBER }}
     steps:
       - name: Checkout 'main' Branch
         uses: actions/checkout@v4
@@ -28,6 +29,7 @@ jobs:
 
       - name: Commit and Push Changes
         working-directory: helm-charts/hazelcast-platform-operator
+        id: helm_chart_pr
         run: |
           git config user.email "alexander.borschuk@hazelcast.com"
           git config user.name "cheels"
@@ -36,6 +38,7 @@ jobs:
           git add .
           git commit --signoff -m "$(echo -e "Update helm chart to ${REPLACED_VERSION} version")"
           git push -u origin $BRANCH_NAME
+          echo "HELM_CHART_PR_NUMBER=2" >> $GITHUB_OUTPUT
 
   deploy_bundle:
     runs-on: 'ubuntu-latest'
@@ -170,6 +173,8 @@ jobs:
     name: Revert Release Changes
     needs: validate_release
     if: always() && needs.validate_release.result == 'failure'
+    env:
+      HELM_CHART_PR_NUMBER: ${{ needs.helm_chart_release.outputs.HELM_CHART_PR_NUMBER }}
     runs-on: 'ubuntu-latest'
     steps:
       - name: Checkout
@@ -178,8 +183,11 @@ jobs:
       - name: Remove ALL
         run: |
           echo ${{ secrets.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
-          BRANCH_NAME=${OPERATOR_NAME}-${BUNDLE_RELEASE_VERSION}-${{ github.run_id }}
-          for REPO in "cheels/certified-operators" "cheels/community-operators" "cheels/community-operators-prod" "cheels/hazelcast-platform-operator"; do   
-             git push origin --delete $BRANCH_NAME
+          for REPO in "cheels/certified-operators"; do   
+              PR_NUMBER=$(gh pr list --repo $REPO --search "operator ${{ env.OPERATOR_NAME }} (${BUNDLE_RELEASE_VERSION})" --json number | jq -r '.[].number')
+              gh pr close $PR_NUMBER --repo $REPO --delete-branch 2>/dev/null
           done
+          gh pr close $HELM_CHART_PR_NUMBER --repo $REPO --delete-branch 2>/dev/null
+          
+          
 
