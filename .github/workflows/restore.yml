@@ -148,17 +148,15 @@ jobs:
         run: |
           echo ${{ secrets.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
           BRANCH_NAME=${OPERATOR_NAME}-${BUNDLE_RELEASE_VERSION}-${{ github.run_id }}
-          PR_NUMBER=$(gh pr list --repo ${{ env.REPO_OWNER }}/${{ env.REPO_NAME }} --search "operator ${{ env.OPERATOR_NAME }} (${BUNDLE_RELEASE_VERSION})" --json number | jq -r '.[].number')
           if [ "${{ env.REPO_NAME }} == "certified-operators" ]; then
               git checkout $BRANCH_NAME
               sed -i "s|merge: *[^ ]*|merge: true|" operators/${OPERATOR_NAME}/ci.yaml
               git add  ./operators/${OPERATOR_NAME}
               git commit --signoff -m "Update ${OPERATOR_NAME} to ${BUNDLE_RELEASE_VERSION}"
               git push -u origin $BRANCH_NAME
-            elif [ "${{ env.REPO_NAME }}" != "certified-operators" ]; then
-              #gh pr comment $PR_NUMBER --body "/hold cancel"
+          elif [ "${{ env.REPO_NAME }}" -ne "certified-operators" ]; then
               echo "PR comment"
-            fi
+          fi
 
       - name: Checkout to cheels/hazelcast-platform-operator
         if: ${{ matrix.repo-name }} == 'hazelcast-platform-operator'
