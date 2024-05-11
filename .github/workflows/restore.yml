@@ -12,7 +12,7 @@ jobs:
   helm_chart_release:
     runs-on: ubuntu-latest
     outputs:
-      HELM_CHART_PR_NUMBER: ${{ steps.helm_chart_pr.outputs.HELM_CHART_PR_NUMBER }}
+      REPLACED_VERSION: ${{ steps.helm_chart_version.outputs.REPLACED_VERSION }}
     steps:
       - name: Checkout 'main' Branch
         uses: actions/checkout@v4
@@ -21,15 +21,16 @@ jobs:
           token: ${{ secrets.DEVOPS_GITHUB_TOKEN }}
 
       - name: Update Chart Version in Main Branch
+        id: helm_chart_version
         working-directory: helm-charts/hazelcast-platform-operator
         run: |
           REPLACED_VERSION=$(echo "$RELEASE_VERSION" | awk -F'.' '{print $1"."$2+1".0"}')
           echo "REPLACED_VERSION=${REPLACED_VERSION}" >> $GITHUB_ENV
+          echo "REPLACED_VERSION=${REPLACED_VERSION}" >> $GITHUB_OUTPUT
           sed -i -E -e 's/(version: ).*/\1"'$REPLACED_VERSION-snapshot'"/' -e 's/(appVersion: ).*/\1"'$REPLACED_VERSION-snapshot'"/' charts/hazelcast-platform-operator-crds/Chart.yaml Chart.yaml
 
       - name: Commit and Push Changes
         working-directory: helm-charts/hazelcast-platform-operator
-        id: helm_chart_pr
         run: |
           git config user.email "alexander.borschuk@hazelcast.com"
           git config user.name "cheels"
@@ -38,7 +39,6 @@ jobs:
           git add .
           git commit --signoff -m "$(echo -e "Update helm chart to ${REPLACED_VERSION} version")"
           git push -u origin $BRANCH_NAME
-          echo "HELM_CHART_PR_NUMBER=2" >> $GITHUB_OUTPUT
 
   deploy_bundle:
     runs-on: 'ubuntu-latest'
@@ -127,7 +127,7 @@ jobs:
     env:
       REPO_NAME: ${{ matrix.repo-name }}
       REPO_OWNER: ${{ matrix.repo-owner }}
-      HELM_CHART_PR_NUMBER: ${{ needs.helm_chart_release.outputs.HELM_CHART_PR_NUMBER }}
+      REPLACED_VERSION: ${{ needs.helm_chart_release.outputs.REPLACED_VERSION }}
     steps:
       - name: Checkout to cheels/${{ env.REPO_NAME }}
         uses: actions/checkout@v4
@@ -174,7 +174,7 @@ jobs:
     needs: validate_release
     if: always() && needs.validate_release.result == 'failure'
     env:
-      HELM_CHART_PR_NUMBER: ${{ needs.helm_chart_release.outputs.HELM_CHART_PR_NUMBER }}
+      REPLACED_VERSION: ${{ needs.helm_chart_release.outputs.REPLACED_VERSION }}
     runs-on: 'ubuntu-latest'
     steps:
       - name: Checkout
@@ -187,7 +187,6 @@ jobs:
               PR_NUMBER=$(gh pr list --repo $REPO --search "operator ${{ env.OPERATOR_NAME }} (${BUNDLE_RELEASE_VERSION})" --json number | jq -r '.[].number')
               gh pr close $PR_NUMBER --repo $REPO --delete-branch 2>/dev/null
           done
-          gh pr close $HELM_CHART_PR_NUMBER --repo $REPO --delete-branch 2>/dev/null
-          
-          
+          HELM_CHART_PR_NUMBER=$(gh pr list --repo cheels/hazelcast-platform-operator --search "Update Helm Chart Version to ${REPLACED_VERSION}-snapshot" --json number | jq -r '.[].number')
+          gh pr close $HELM_CHART_PR_NUMBER --repo cheels/hazelcast-platform-operator --delete-branch 2>/dev/null
 
