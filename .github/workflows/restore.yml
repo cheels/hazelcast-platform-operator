@@ -51,6 +51,7 @@ jobs:
           if [ "${{ env.REPO_NAME }}" == "certified-operators" ]; then
             sed -i "s|merge: *[^ ]*|merge: false|" operators/${OPERATOR_NAME}/ci.yaml
           fi
+          mkdir -p operators/${OPERATOR_NAME}/${BUNDLE_RELEASE_VERSION}
           git add  ./operators/${OPERATOR_NAME}
           git commit --signoff -m "Update ${OPERATOR_NAME} to ${BUNDLE_RELEASE_VERSION}"
           git push -u origin $BRANCH_NAME
