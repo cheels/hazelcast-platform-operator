@@ -44,6 +44,7 @@ jobs:
         run: |
           echo ${{ secrets.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
           gh pr create --title "Update Helm Chart Version to ${REPLACED_VERSION}-snapshot" \
+          --base main \
           --label "non-release" \
           --milestone "${RELEASE_VERSION}" \
           --body ""
