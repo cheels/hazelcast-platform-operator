@@ -42,7 +42,7 @@ jobs:
       - name: Create PR to Main Branch
         id: helm_chart_pr
         run: |
-          echo ${{ env.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
+          echo ${{ secrets.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
           gh pr create --title "Update Helm Chart Version to ${REPLACED_VERSION}-snapshot" \
           --label "non-release" \
           --milestone "${RELEASE_VERSION}" \
