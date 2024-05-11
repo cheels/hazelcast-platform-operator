@@ -12,8 +12,6 @@ env:
 jobs:
   helm_chart_release:
     runs-on: ubuntu-latest
-    outputs:
-      HELM_CHART_PR_NUMBER: ${{ steps.helm_chart_pr.outputs.HELM_CHART_PR_NUMBER }}
     steps:
       - name: Checkout 'main' Branch
         uses: actions/checkout@v4
@@ -38,19 +36,6 @@ jobs:
           git add .
           git commit --signoff -m "$(echo -e "Update helm chart to ${REPLACED_VERSION} version")"
           git push -u origin $BRANCH_NAME
-
-      - name: Create PR to Main Branch
-        id: helm_chart_pr
-        run: |
-          echo ${{ secrets.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
-          BRANCH_NAME=update-helm-chart-to-${REPLACED_VERSION}
-          gh pr create --title "Update Helm Chart Version to ${REPLACED_VERSION}-snapshot" \
-          --repo cheels/hazelcast-platform-operator \
-          --head cheels:$BRANCH_NAME \
-          --label "non-release" \
-          --milestone "${RELEASE_VERSION}" \
-          --body ""
-          echo "HELM_CHART_PR_NUMBER=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
 
   deploy_bundle:
     runs-on: 'ubuntu-latest'
@@ -106,20 +91,6 @@ jobs:
           git add  ./operators/${OPERATOR_NAME}
           git commit --signoff -m "Update ${OPERATOR_NAME} to ${BUNDLE_RELEASE_VERSION}"
           git push -u origin $BRANCH_NAME
-
-      - name: Create PR
-        working-directory: ${{ env.REPO_NAME }}
-        run: |
-          echo ${{ secrets.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
-          gh pr create --title \
-          "operator ${OPERATOR_NAME} (${BUNDLE_RELEASE_VERSION})" --body "" --repo ${REPO_OWNER}/${REPO_NAME} --base main
-          if ! gh pr view ${{ github.event.pull_request.number }} &> /dev/null; then
-              echo "Pull request ${{ github.event.pull_request.number }} not found, retrying in 10 seconds..."
-              sleep 10
-          fi
-          if [ "${{ env.REPO_NAME }}" != "certified-operators" ]; then
-            gh pr comment ${{ github.event.pull_request.number }} --body "/hold"
-          fi
 
   validate_release:
     if: always()
@@ -185,7 +156,8 @@ jobs:
               git commit --signoff -m "Update ${OPERATOR_NAME} to ${BUNDLE_RELEASE_VERSION}"
               git push -u origin $BRANCH_NAME
             elif [ "${{ env.REPO_NAME }}" != "certified-operators" ]; then
-              gh pr comment $PR_NUMBER --body "/hold cancel"
+              #gh pr comment $PR_NUMBER --body "/hold cancel"
+              echo "PR comment"
             fi
 
       - name: Checkout to cheels/hazelcast-platform-operator
@@ -200,14 +172,12 @@ jobs:
         if: ${{ matrix.repo-name }} == 'hazelcast-platform-operator'
         run: |
           echo ${{ secrets.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
-          gh pr merge $HELM_CHART_PR_NUMBER --admin
+          echo "gh pr merge"
           
   restore-publish:
     name: Revert Release Changes
     needs: validate_release
     if: always() && needs.validate_release.result == 'failure'
-    env:
-      HELM_CHART_PR_NUMBER: ${{ needs.helm_chart_release.outputs.HELM_CHART_PR_NUMBER }}
     runs-on: 'ubuntu-latest'
     steps:
       - name: Checkout
@@ -220,5 +190,4 @@ jobs:
           for REPO in "cheels/certified-operators" "cheels/community-operators" "cheels/community-operators-prod" "cheels/hazelcast-platform-operator"; do   
              git push origin --delete $BRANCH_NAME
           done
-             close $HELM_CHART_PR_NUMBER--repo cheels/hazelcast-platform-operator --delete-branch 2>/dev/null
 
