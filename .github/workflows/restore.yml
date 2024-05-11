@@ -5,7 +5,8 @@ on:
 
 env:
   DOTNET_VERSION: '3.1.404'
-
+  OPERATOR_NAME: "hazelcast-platform-operator"
+  BUNDLE_RELEASE_VERSION: 5.13.0
 
 jobs:
   build-and-publish:
