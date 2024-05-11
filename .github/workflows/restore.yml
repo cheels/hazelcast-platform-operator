@@ -153,6 +153,7 @@ jobs:
               BRANCH_NAME=${OPERATOR_NAME}-${BUNDLE_RELEASE_VERSION}-${{ github.run_id }}
               git checkout $BRANCH_NAME
               sed -i "s|merge: *[^ ]*|merge: true|" operators/${OPERATOR_NAME}/ci.yaml
+              git add  ./operators/${OPERATOR_NAME}
               git commit --signoff -m "Enable auto-merge"
               git push -u origin $BRANCH_NAME
           else 
