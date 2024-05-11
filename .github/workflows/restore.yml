@@ -46,7 +46,7 @@ jobs:
           BRANCH_NAME=update-helm-chart-to-${REPLACED_VERSION}
           gh pr create --title "Update Helm Chart Version to ${REPLACED_VERSION}-snapshot" \
           --repo cheels/hazelcast-platform-operator \
-          --base main --head cheels:$BRANCH_NAME \
+          --head cheels:$BRANCH_NAME \
           --label "non-release" \
           --milestone "${RELEASE_VERSION}" \
           --body ""
