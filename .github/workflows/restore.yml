@@ -148,7 +148,7 @@ jobs:
         run: |
           echo ${{ secrets.DEVOPS_GITHUB_TOKEN }} | gh auth login --with-token
           BRANCH_NAME=${OPERATOR_NAME}-${BUNDLE_RELEASE_VERSION}-${{ github.run_id }}
-          if [ "${{ env.REPO_NAME }} == "certified-operators" ]; then
+          if [ "${{ env.REPO_NAME }}" == "certified-operators" ]; then
               git checkout $BRANCH_NAME
               sed -i "s|merge: *[^ ]*|merge: true|" operators/${OPERATOR_NAME}/ci.yaml
               git add  ./operators/${OPERATOR_NAME}
