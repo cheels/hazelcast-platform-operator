@@ -133,15 +133,6 @@ jobs:
           path: ${{ env.REPO_NAME }}
           token: ${{ secrets.DEVOPS_GITHUB_TOKEN }}
 
-      - name: Update main branch of the fork
-        if: matrix.repo-name == 'certified-operators' || matrix.repo-name == 'community-operators' || matrix.repo-name == 'community-operators-prod'
-        working-directory: ${{ env.REPO_NAME }}
-        run: |
-          git checkout main
-          git remote add upstream https://github.com/${REPO_OWNER}/${REPO_NAME}.git
-          git pull upstream main
-          git push origin main
-
       - name: Enable Auto-Merge For PR's
         if: matrix.repo-name == 'certified-operators' || matrix.repo-name == 'community-operators' || matrix.repo-name == 'community-operators-prod'
         working-directory: ${{ env.REPO_NAME }}
