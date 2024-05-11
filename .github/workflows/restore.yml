@@ -40,7 +40,17 @@ jobs:
           repository: cheels/${{ env.REPO_NAME }}
           path: ${{ env.REPO_NAME }}
           token: ${{ secrets.DEVOPS_GITHUB_TOKEN }}
-        
+          
+      - name: Build Red Hat Bundle
+        run: |
+          IMAGE_NAME_DIGEST=docker.io/cheels/${OPERATOR_NAME}@sha256:c47518440412e86d3cf195967212ac2ca39774ed2c3dfd780ce8cc07df33ea1a
+          make bundle IMG=${IMAGE_NAME_DIGEST} VERSION=5.13.0
+          cat >> ./bundle/metadata/annotations.yaml <<EOF
+            # OpenShift annotations.
+            com.redhat.openshift.versions: v4.8
+            operators.operatorframework.io.bundle.channel.default.v1: alpha
+          EOF
+          
       - name: Create branch
         working-directory: ${{ env.REPO_NAME }}
         run: |
