@@ -152,6 +152,7 @@ jobs:
           if [ "${{ env.REPO_NAME }}" == "certified-operators" ]; then
               BRANCH_NAME=${OPERATOR_NAME}-${BUNDLE_RELEASE_VERSION}-${{ github.run_id }}
               git checkout $BRANCH_NAME
+              git fetch --all
               sed -i "s|merge: *[^ ]*|merge: true|" operators/${OPERATOR_NAME}/ci.yaml
               git add  ./operators/${OPERATOR_NAME}
               git commit --signoff -m "Enable auto-merge"
