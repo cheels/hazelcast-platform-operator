@@ -11,6 +11,7 @@ import (
 	"github.com/lucasb-eyer/go-colorful"
 	"github.com/tufin/oasdiff/checker"
 	"github.com/tufin/oasdiff/diff"
+	"github.com/tufin/oasdiff/formatters"
 	"github.com/tufin/oasdiff/load"
 	"gopkg.in/yaml.v3"
 	"log"
@@ -23,6 +24,9 @@ import (
 var (
 	white = bunt.GhostWhite
 )
+var gitHubFormatter = formatters.GitHubActionsFormatter{
+	Localizer: checker.NewDefaultLocalizer(),
+}
 
 func colorText(format string, color colorful.Color, a ...interface{}) string {
 	return bunt.Style(
@@ -101,16 +105,16 @@ func generateCRDFile(version string) (string, error) {
 	outputFile := fmt.Sprintf("%s.yaml", version)
 
 	// Add hazelcast repo and update
-	addRepoCmd := exec.Command("sh", "-c", "helm repo add hazelcast https://hazelcast-charts.s3.amazonaws.com && helm repo update")
-	var addRepoOut bytes.Buffer
-	var addRepoErr bytes.Buffer
-	addRepoCmd.Stdout = &addRepoOut
-	addRepoCmd.Stderr = &addRepoErr
+	/*	addRepoCmd := exec.Command("sh", "-c", "helm repo add hazelcast https://hazelcast-charts.s3.amazonaws.com && helm repo update")
+		var addRepoOut bytes.Buffer
+		var addRepoErr bytes.Buffer
+		addRepoCmd.Stdout = &addRepoOut
+		addRepoCmd.Stderr = &addRepoErr
 
-	err := addRepoCmd.Run()
-	if err != nil {
-		return "", fmt.Errorf("failed to add and update hazelcast repo: %v, stderr: %s", err, addRepoErr.String())
-	}
+		err := addRepoCmd.Run()
+		if err != nil {
+			return "", fmt.Errorf("failed to add and update hazelcast repo: %v, stderr: %s", err, addRepoErr.String())
+		}*/
 
 	// Run helm template command
 	cmd := exec.Command("sh", "-c", fmt.Sprintf("helm template operator hazelcast/hazelcast-platform-operator-crds --version=%s > %s", version, outputFile))
@@ -119,7 +123,7 @@ func generateCRDFile(version string) (string, error) {
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
 
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate CRD file for version %s: %v, stderr: %s", version, err, stderr.String())
 	}
@@ -225,20 +229,17 @@ func main() {
 		return
 	}
 	errs := checker.CheckBackwardCompatibility(checker.GetDefaultChecks(), diffRes, operationsSources)
-	errs, err = checker.ProcessIgnoredBackwardCompatibilityErrors(checker.WARN, errs, "ignore-err.txt", checker.NewDefaultLocalizer())
-	if err != nil {
-		log.Fatalf("ignore errors failed with %v", os.Stderr)
-		return
-	}
-
+	/*	errs, err = checker.ProcessIgnoredBackwardCompatibilityErrors(checker.WARN, errs, "ignore-err.txt", checker.NewDefaultLocalizer())
+		if err != nil {
+			log.Fatalf("ignore errors failed with %v", os.Stderr)
+			return
+		}*/
+	output, err := gitHubFormatter.RenderBreakingChanges(errs, formatters.NewRenderOpts())
 	if len(errs) > 0 {
 		localizer := checker.NewDefaultLocalizer()
 		count := errs.GetLevelCount()
 		fmt.Print(localizer("total-errors", len(errs), count[checker.ERR], "error", count[checker.WARN], "warning"))
-		for _, bcerr := range errs {
-			output := bcerr.MultiLineError(localizer, checker.ColorAuto)
-			filteredOutput := filterOutput(output)
-			fmt.Printf("%s\n\n", filteredOutput)
-		}
+
+		fmt.Printf("%s\n\n", output)
 	}
 }
