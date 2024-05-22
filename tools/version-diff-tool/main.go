@@ -1,5 +1,3 @@
-// main.go
-
 package main
 
 import (
@@ -42,7 +40,7 @@ type CRD struct {
 	} `yaml:"spec"`
 }
 
-func createOpenAPIBundle(crds []CRD) map[string]interface{} {
+func createOpenAPISpec(crds []CRD) map[string]interface{} {
 	paths := make(map[string]interface{})
 	for _, crd := range crds {
 		path := fmt.Sprintf("/%s.%s", strings.ToLower(crd.Spec.Names.Kind), "hazelcast.com")
@@ -104,7 +102,7 @@ func extractCRDs(inputFile string) ([]CRD, error) {
 	return crds, nil
 }
 
-func writeOpenAPIBundle(outputFile string, openAPISpec map[string]interface{}) error {
+func writeOpenAPISpec(outputFile string, openAPISpec map[string]interface{}) error {
 	data, err := yaml.Marshal(&openAPISpec)
 	if err != nil {
 		return fmt.Errorf("failed to marshal OpenAPI spec: %v", err)
@@ -127,10 +125,6 @@ func filterOutput(output string) string {
 	return output
 }
 
-func writeToFile(filename, content string) error {
-	return os.WriteFile(filename, []byte(content), 0644)
-}
-
 func main() {
 	loader := openapi3.NewLoader()
 	loader.IsExternalRefsAllowed = true
@@ -140,40 +134,40 @@ func main() {
 	flag.Parse()
 
 	if *base == "" || *revision == "" {
-		log.Fatal("Both versions (-base, -revision) must be provided")
+		log.Fatal("both versions (-base, -revision) must be provided")
 	}
 
 	rawBaseCrd, err := generateCRDFile(*base)
 	if err != nil {
-		log.Fatalf("Failed to generate first CRD file: %v", err)
+		log.Fatalf("failed to generate first CRD file: %v", err)
 	}
 
 	rawRevisionCrd, err := generateCRDFile(*revision)
 	if err != nil {
-		log.Fatalf("Failed to generate second CRD file: %v", err)
+		log.Fatalf("failed to generate second CRD file: %v", err)
 	}
 
 	baseCrd, err := extractCRDs(rawBaseCrd)
 	if err != nil {
-		log.Fatalf("Failed to extract CRDs from first file: %v", err)
+		log.Fatalf("failed to extract CRDs from first file: %v", err)
 	}
 
 	revisionCrd, err := extractCRDs(rawRevisionCrd)
 	if err != nil {
-		log.Fatalf("Failed to extract CRDs from second file: %v", err)
+		log.Fatalf("failed to extract CRDs from second file: %v", err)
 	}
 
-	baseOpenAPISpec := createOpenAPIBundle(baseCrd)
-	revisionOpenAPISpec := createOpenAPIBundle(revisionCrd)
+	baseOpenAPISpec := createOpenAPISpec(baseCrd)
+	revisionOpenAPISpec := createOpenAPISpec(revisionCrd)
 
 	baseFile := fmt.Sprintf("%s.yaml", *base)
-	if err := writeOpenAPIBundle(baseFile, baseOpenAPISpec); err != nil {
-		log.Fatalf("Failed to write first OpenAPI bundle: %v", err)
+	if err := writeOpenAPISpec(baseFile, baseOpenAPISpec); err != nil {
+		log.Fatalf("failed to write first OpenAPI spec: %v", err)
 	}
 
 	revisionFile := fmt.Sprintf("%s.yaml", *revision)
-	if err := writeOpenAPIBundle(revisionFile, revisionOpenAPISpec); err != nil {
-		log.Fatalf("Failed to write second OpenAPI bundle: %v", err)
+	if err := writeOpenAPISpec(revisionFile, revisionOpenAPISpec); err != nil {
+		log.Fatalf("failed to write second OpenAPI : %v", err)
 	}
 	b, err := load.NewSpecInfo(loader, load.NewSource(baseFile))
 	r, err := load.NewSpecInfo(loader, load.NewSource(revisionFile))
@@ -186,21 +180,15 @@ func main() {
 		return
 	}
 	errs := checker.CheckBackwardCompatibility(checker.GetDefaultChecks(), diffRes, operationsSources)
-	errs, err = checker.ProcessIgnoredBackwardCompatibilityErrors(checker.WARN, errs, "ignore-err.txt", checker.NewDefaultLocalizer())
-	if err != nil {
-		log.Fatalf("ignore errors failed with %v", os.Stderr)
-		return
-	}
-
 	if len(errs) > 0 || len(errs) == 0 {
 		localizer := checker.NewDefaultLocalizer()
 		count := errs.GetLevelCount()
 		result := fmt.Sprintf(localizer("total-errors", len(errs), count[checker.ERR], "error", count[checker.WARN], "warning"))
 		for _, bcerr := range errs {
-			output := bcerr.SingleLineError(localizer, checker.ColorAlways)
+			output := bcerr.MultiLineError(localizer, checker.ColorAlways)
 			filteredOutput := filterOutput(output)
-			result += fmt.Sprintf("%s\n", filteredOutput)
+			result += fmt.Sprintf("\n%s\n", filteredOutput)
 		}
-		fmt.Printf("%s\n", result)
+		fmt.Printf("\n%s", result)
 	}
 }
