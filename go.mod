@@ -1,6 +1,6 @@
 module github.com/hazelcast/hazelcast-platform-operator
 
-go 1.21
+go 1.22.3
 
 require (
 	cloud.google.com/go/bigquery v1.60.0
