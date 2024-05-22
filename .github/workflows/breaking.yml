@@ -22,9 +22,10 @@ jobs:
       working-directory: tools/version-diff-tool
       run: |
         helm repo add hazelcast https://hazelcast-charts.s3.amazonaws.com && helm repo update && \
-        BASE="5.7"  
-        REVISION="5.8"  
-        OUTPUT=$(go run main.go -base $BASE -revision $REVISION)
+        STABLE_VERSION=$(curl -s https://artifacthub.io/api/v1/packages/helm/hazelcast/hazelcast-platform-operator | jq -r '.available_versions | map(select(.version | contains("snapshot") | not)) | .[0].version')
+        LATEST_SNAPSHOT=$(curl -s https://artifacthub.io/api/v1/packages/helm/hazelcast/hazelcast-platform-operator | jq -r '.version')
+          
+        OUTPUT=$(go run main.go -base $LATEST_STABLE_VERSION -revision $LATEST_SNAPSHOT)
 
         # Check for "0 breaking changes"
         if echo "$OUTPUT" | grep -q "0 breaking changes"; then
