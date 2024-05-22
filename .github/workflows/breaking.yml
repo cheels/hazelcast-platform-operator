@@ -2,6 +2,10 @@ name: Check Breaking Changes
 
 on: [workflow_dispatch]
 
+env:
+  HELM_REPO_NAME: operator
+  HELM_REPO_URL: https://hazelcast-charts.s3.amazonaws.com
+  
 jobs:
   check_breaking_changes:
     runs-on: ubuntu-latest
@@ -17,7 +21,6 @@ jobs:
     - name: Run check for breaking changes
       working-directory: tools/version-diff-tool
       run: |
-        helm template operator hazelcast/hazelcast-platform-operator-crds --version=5.6 > 5.6.yaml
         BASE="5.6"  # Set your base version here or pass it as an input
         REVISION="5.7"  # Set your revision version here or pass it as an input
         OUTPUT=$(go run main.go -base $BASE -revision $REVISION)
