@@ -214,7 +214,7 @@ func main() {
 		count := errs.GetLevelCount()
 		fmt.Print(localizer("total-errors", len(errs), count[checker.ERR], "error", count[checker.WARN], "warning"))
 		for _, bcerr := range errs {
-			output := bcerr.MultiLineError(localizer, checker.ColorAuto)
+			output := bcerr.SingleLineError(localizer, checker.ColorAuto)
 			filteredOutput := filterOutput(output)
 			fmt.Printf("%s\n\n", filteredOutput)
 		}
