@@ -14,6 +14,7 @@ jobs:
       with:
         go-version: "1.22.3"
         cache-dependency-path: "**/*.sum"
+        cache: true
             
     - name: Run check for breaking changes
       working-directory: tools/version-diff-tool
