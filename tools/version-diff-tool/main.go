@@ -8,6 +8,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/gonvenience/bunt"
 	"github.com/lucasb-eyer/go-colorful"
+	"github.com/pkg/errors"
 	"github.com/tufin/oasdiff/checker"
 	"github.com/tufin/oasdiff/diff"
 	"github.com/tufin/oasdiff/load"
@@ -20,6 +21,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 var (
@@ -28,6 +30,7 @@ var (
 
 func init() {
 	helmRepoAdd("operator", "https://hazelcast-charts.s3.amazonaws.com")
+	RepoUpdate()
 }
 
 type CRD struct {
@@ -117,6 +120,40 @@ func helmRepoAdd(repoName, repoURL string) {
 		log.Fatalf("failed to write repository file: %v", err)
 	}
 	fmt.Printf("%q has been added to your repositories\n", repoName)
+}
+
+func RepoUpdate() {
+	settings := cli.New()
+	repoFile := settings.RepositoryConfig
+
+	f, err := repo.LoadFile(repoFile)
+	if os.IsNotExist(errors.Cause(err)) || len(f.Repositories) == 0 {
+		log.Fatal(errors.New("no repositories found. You must add one before updating"))
+	}
+	var repos []*repo.ChartRepository
+	for _, cfg := range f.Repositories {
+		r, err := repo.NewChartRepository(cfg, getter.All(settings))
+		if err != nil {
+			log.Fatal(err)
+		}
+		repos = append(repos, r)
+	}
+
+	fmt.Printf("Hang tight while we grab the latest from your chart repositories...\n")
+	var wg sync.WaitGroup
+	for _, re := range repos {
+		wg.Add(1)
+		go func(re *repo.ChartRepository) {
+			defer wg.Done()
+			if _, err := re.DownloadIndexFile(); err != nil {
+				fmt.Printf("...Unable to get an update from the %q chart repository (%s):\n\t%s\n", re.Config.Name, re.Config.URL, err)
+			} else {
+				fmt.Printf("...Successfully got an update from the %q chart repository\n", re.Config.Name)
+			}
+		}(re)
+	}
+	wg.Wait()
+	fmt.Printf("Update Complete. ⎈ Happy Helming!⎈\n")
 }
 
 func generateCRDFile(version string) (string, error) {
