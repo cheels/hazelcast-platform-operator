@@ -3,6 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
+	"os"
+	"regexp"
+	"strings"
+	"sync"
+
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/tufin/oasdiff/checker"
 	"github.com/tufin/oasdiff/diff"
@@ -13,10 +19,6 @@ import (
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/getter"
 	"helm.sh/helm/v3/pkg/repo"
-	"log"
-	"os"
-	"regexp"
-	"strings"
 )
 
 type CRD struct {
@@ -170,75 +172,73 @@ func filterOutput(output string) string {
 	warningMsgPattern := regexp.MustCompile(`This is a warning because.*?change in specification\.`)
 	apiPattern := regexp.MustCompile(`in API`)
 	postPattern := regexp.MustCompile(`POST`)
-	crdNameRegex := regexp.MustCompile(`\b(\w+\.\w+\.\w+)\b`)
-
 	output = warningMsgPattern.ReplaceAllString(output, "")
 	output = apiPattern.ReplaceAllString(output, "")
 	output = postPattern.ReplaceAllString(output, "in")
-	output = crdNameRegex.ReplaceAllString(output, "$1")
 	output = strings.Replace(output, "/", "", 1)
 	output = strings.Replace(output, "/", ".", 2)
 	return output
 }
 
+func generateAndExtractCRDs(version string, outputFile string, wg *sync.WaitGroup, specInfo **load.SpecInfo, apiLoader *openapi3.Loader) {
+	defer wg.Done()
+	rawCrdFile, err := generateCRDFile(version)
+	if err != nil {
+		log.Fatalf("failed to generate CRD file for version %s: %v", version, err)
+	}
+
+	crds, err := extractCRDs(rawCrdFile)
+	if err != nil {
+		log.Fatalf("failed to extract CRDs from file for version %s: %v", version, err)
+	}
+
+	openAPISpec := createOpenAPISpec(crds)
+	if err := writeOpenAPISpec(outputFile, openAPISpec); err != nil {
+		log.Fatalf("failed to write OpenAPI spec for version %s: %v", version, err)
+	}
+
+	*specInfo, err = load.NewSpecInfo(apiLoader, load.NewSource(outputFile))
+	if err != nil {
+		log.Fatalf("failed to load spec info for version %s: %v", version, err)
+	}
+}
+
 func main() {
-	loader := openapi3.NewLoader()
-	loader.IsExternalRefsAllowed = true
 	base := flag.String("base", "", "Version of the first CRD to compare")
 	revision := flag.String("revision", "", "Version of the second CRD to compare")
-	//format := flag.Bool("f", false, "Apply filtering to the output and output only breaking changes")
 	flag.Parse()
 
 	if *base == "" || *revision == "" {
 		log.Fatal("both versions (-base, -revision) must be provided")
 	}
 
-	rawBaseCrd, err := generateCRDFile(*base)
-	if err != nil {
-		log.Fatalf("failed to generate first CRD file: %v", err)
-	}
-
-	rawRevisionCrd, err := generateCRDFile(*revision)
-	if err != nil {
-		log.Fatalf("failed to generate second CRD file: %v", err)
-	}
-
-	baseCrd, err := extractCRDs(rawBaseCrd)
-	if err != nil {
-		log.Fatalf("failed to extract CRDs from first file: %v", err)
-	}
-
-	revisionCrd, err := extractCRDs(rawRevisionCrd)
-	if err != nil {
-		log.Fatalf("failed to extract CRDs from second file: %v", err)
-	}
-
-	baseOpenAPISpec := createOpenAPISpec(baseCrd)
-	revisionOpenAPISpec := createOpenAPISpec(revisionCrd)
-
+	apiLoader := openapi3.NewLoader()
+	apiLoader.IsExternalRefsAllowed = true
+	var wg sync.WaitGroup
+	var baseSpec, revisionSpec *load.SpecInfo
 	baseFile := fmt.Sprintf("%s.yaml", *base)
-	if err := writeOpenAPISpec(baseFile, baseOpenAPISpec); err != nil {
-		log.Fatalf("failed to write first OpenAPI spec: %v", err)
-	}
-
 	revisionFile := fmt.Sprintf("%s.yaml", *revision)
-	if err := writeOpenAPISpec(revisionFile, revisionOpenAPISpec); err != nil {
-		log.Fatalf("failed to write second OpenAPI : %v", err)
-	}
-	b, err := load.NewSpecInfo(loader, load.NewSource(baseFile))
-	r, err := load.NewSpecInfo(loader, load.NewSource(revisionFile))
+
+	wg.Add(2)
+
+	go generateAndExtractCRDs(*base, baseFile, &wg, &baseSpec, apiLoader)
+	go generateAndExtractCRDs(*revision, revisionFile, &wg, &revisionSpec, apiLoader)
+
+	wg.Wait()
+
 	diffRes, operationsSources, err := diff.GetPathsDiff(diff.NewConfig(),
-		[]*load.SpecInfo{b},
-		[]*load.SpecInfo{r},
+		[]*load.SpecInfo{baseSpec},
+		[]*load.SpecInfo{revisionSpec},
 	)
 	if err != nil {
-		log.Fatalf("diff failed with %v", os.Stderr)
-		return
+		log.Fatalf("diff failed with %v", err)
 	}
+
 	errs := checker.CheckBackwardCompatibility(checker.GetDefaultChecks(), diffRes, operationsSources)
-	if len(errs) > 0 || len(errs) == 0 {
+	if len(errs) > 0 {
 		localization := checker.NewDefaultLocalizer()
 		count := errs.GetLevelCount()
+		fmt.Printf("Comparing CRD files: %s and %s\n", *base, *revision)
 		result := fmt.Sprintf(localization("total-errors", len(errs), count[checker.ERR], "error", count[checker.WARN], "warning"))
 		for _, bc := range errs {
 			output := bc.MultiLineError(localization, checker.ColorAlways)
