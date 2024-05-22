@@ -24,7 +24,7 @@ jobs:
         helm repo add hazelcast https://hazelcast-charts.s3.amazonaws.com && helm repo update
         STABLE_VERSION=$(curl -s https://artifacthub.io/api/v1/packages/helm/hazelcast/hazelcast-platform-operator | jq -r '.available_versions | map(select(.version | contains("snapshot") | not)) | .[0].version')
         LATEST_SNAPSHOT=$(curl -s https://artifacthub.io/api/v1/packages/helm/hazelcast/hazelcast-platform-operator | jq -r '.version')
-        RESULT=$(go run main.go -base $LATEST_STABLE_VERSION -revision $LATEST_SNAPSHOT)
+        RESULT=$(go run main.go -base $STABLE_VERSION -revision $LATEST_SNAPSHOT)
         echo "$RESULT" | grep -q "0 breaking changes" || { echo "$RESULT"; exit 1; }
 
 
