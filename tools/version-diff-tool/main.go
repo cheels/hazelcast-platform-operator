@@ -1,297 +1,222 @@
+// main.go
+
 package main
 
 import (
 	"flag"
 	"fmt"
-	"github.com/hashicorp/go-version"
-	"github.com/tidwall/sjson"
-	"io"
-	"net/http"
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/gonvenience/bunt"
+	"github.com/lucasb-eyer/go-colorful"
+	"github.com/tufin/oasdiff/checker"
+	"github.com/tufin/oasdiff/diff"
+	"github.com/tufin/oasdiff/load"
+	"gopkg.in/yaml.v3"
+	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"sigs.k8s.io/yaml"
+	"regexp"
 	"strings"
 )
 
-const (
-	// File names
-	outputFileName          = `diff_%s_%s.txt`
-	descriptionlessFileName = `r%s`
-	bundleFileName          = `bundle-%s.yaml`
-	openAPIFileName         = `open-api-%s`
-
-	// Splitters
-	schemaSplitter = `---`
-
-	// Links
-	bundleDownloadLink = `https://repository.hazelcast.com/operator/` + bundleFileName
-
-	// Helm related
-	helmInstall      = `helm template operator hazelcast/hazelcast-platform-operator-crds --version=%s > ` + bundleFileName
-	helmChartVersion = "5.6"
-
-	// yq commands
-	crdNamesSelector   = `yq '.. | select(has("singular")).singular' %s`
-	schemaSelector     = `yq '.. | select(has("schema")).schema' %s`
-	descriptionDeleter = `yq 'del(.. | select(has("description")).description)' %s > ` + descriptionlessFileName
-	flatten            = `yq eval '.. | select((tag == "!!map" or tag == "!!seq") | not) | (path | join(".")) + "=" + .' kdiff.yaml | sed 's/components.schemas.//g' | sed 's/properties.//g' | sed 's/modified.//g' | sed 's/stringsdiff.//g'`
-
-	// oasdiff commands
-	diff = `oasdiff -base %s -revision %s > kdiff.yaml`
-
-	// Open API YAML
-	openAPIYAML = `openapi: 3.0.0
-info:
-  version: 1.0.0
-  title: Sample API
-  description: A sample API to illustrate OpenAPI concepts
-components:
-  schemas:
-`
+var (
+	white = bunt.GhostWhite
 )
 
-func main() {
-	base, revision, err := parseParams()
-	if err != nil {
-		panic(fmt.Errorf("an error occurred while parsing parameters: %s", err.Error()))
-	}
-
-	baseBundle, err := downloadBundleYAML(base)
-	if err != nil {
-		panic(fmt.Errorf("an error occurred while downloading base bundle yaml: %s", err.Error()))
-	}
-
-	revBundle, err := downloadBundleYAML(revision)
-	if err != nil {
-		panic(fmt.Errorf("an error occurred while downloading revision bundle yaml: %s", err.Error()))
-	}
-
-	baseSpec, err := createOpenAPISpec(baseBundle)
-	if err != nil {
-		panic(fmt.Errorf("an error occurred while creating base api spec: %s", err.Error()))
-	}
-
-	revSpec, err := createOpenAPISpec(revBundle)
-	if err != nil {
-		panic(fmt.Errorf("an error occurred while creating revision api spec: %s", err.Error()))
-	}
-
-	diffFile, err := compareSpecs(baseSpec, revSpec)
-	if err != nil {
-		panic(fmt.Errorf("an error occurred while comparing specs: %s", err.Error()))
-	}
-
-	err = cleanup()
-	if err != nil {
-		panic(fmt.Errorf("an error occurred while cleaning up: %s", err.Error()))
-	}
-
-	fmt.Println("Spec diff is extracted to file: " + diffFile)
+func colorText(format string, color colorful.Color, a ...interface{}) string {
+	return bunt.Style(
+		fmt.Sprintf(format, a...),
+		bunt.EachLine(),
+		bunt.Foreground(color),
+	)
+}
+func underlineText(format string, a ...interface{}) string {
+	return bunt.Style(
+		fmt.Sprintf(format, a...),
+		bunt.EachLine(),
+		bunt.Underline(),
+	)
 }
 
-func parseParams() (string, string, error) {
-	var base, revision string
+type CRD struct {
+	APIVersion string `yaml:"apiVersion"`
+	Kind       string `yaml:"kind"`
+	Metadata   struct {
+		Name string `yaml:"name"`
+	} `yaml:"metadata"`
+	Spec struct {
+		Names struct {
+			Kind string `yaml:"kind"`
+		} `yaml:"names"`
+		Versions []struct {
+			Schema struct {
+				OpenAPIV3Schema struct {
+					Properties map[string]struct {
+						Description string                 `yaml:"description,omitempty"`
+						Properties  map[string]interface{} `yaml:"properties"`
+						Required    []string               `yaml:"required,omitempty"`
+						Type        string                 `yaml:"type"`
+					} `yaml:"properties"`
+				} `yaml:"openAPIV3Schema"`
+			} `yaml:"schema"`
+		} `yaml:"versions"`
+	} `yaml:"spec"`
+}
 
-	flag.StringVar(&base, "base", "", "base yaml")
-	flag.StringVar(&revision, "revision", "", "revision yaml")
+func createOpenAPIBundle(crds []CRD) map[string]interface{} {
+	paths := make(map[string]interface{})
+	for _, crd := range crds {
+		path := fmt.Sprintf("/%s.%s", strings.ToLower(crd.Spec.Names.Kind), "hazelcast.com")
+		schema := map[string]interface{}{
+			"description": crd.Metadata.Name,
+			"type":        "object",
+			"required":    []string{"spec"},
+			"properties": map[string]interface{}{
+				"apiVersion": map[string]interface{}{"type": "string"},
+				"kind":       map[string]interface{}{"type": "string"},
+				"metadata":   map[string]interface{}{"type": "object"},
+				"spec":       crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"],
+				"status":     crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["status"],
+			},
+		}
+
+		paths[path] = map[string]interface{}{
+			"post": map[string]interface{}{
+				"requestBody": map[string]interface{}{
+					"required": true,
+					"content": map[string]interface{}{
+						"application/json": map[string]interface{}{
+							"schema": schema,
+						},
+					},
+				},
+			},
+		}
+	}
+	return map[string]interface{}{"paths": paths}
+}
+
+func generateCRDFile(version string) (string, error) {
+	outputFile := fmt.Sprintf("%s.yaml", version)
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("helm template operator hazelcast/hazelcast-platform-operator-crds --version=%s > %s", version, outputFile))
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to generate CRD file for version %s: %v", version, err)
+	}
+	return outputFile, nil
+}
+
+func extractCRDs(inputFile string) ([]CRD, error) {
+	data, err := os.ReadFile(inputFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %v", err)
+	}
+
+	var crds []CRD
+	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
+	for {
+		var crd CRD
+		if err := decoder.Decode(&crd); err != nil {
+			break
+		}
+		if crd.Kind == "CustomResourceDefinition" {
+			crds = append(crds, crd)
+		}
+	}
+	return crds, nil
+}
+
+func writeOpenAPIBundle(outputFile string, openAPISpec map[string]interface{}) error {
+	data, err := yaml.Marshal(&openAPISpec)
+	if err != nil {
+		return fmt.Errorf("failed to marshal OpenAPI spec: %v", err)
+	}
+	return os.WriteFile(outputFile, data, 0644)
+}
+
+func filterOutput(output string) string {
+	warningMsgPattern := regexp.MustCompile(`This is a warning because.*?change in specification\.`)
+	apiPattern := regexp.MustCompile(`in API`)
+	postPattern := regexp.MustCompile(`POST`)
+	crdNameRegex := regexp.MustCompile(`\b(\w+\.\w+\.\w+)\b`)
+
+	output = warningMsgPattern.ReplaceAllString(output, "")
+	output = apiPattern.ReplaceAllString(output, "")
+	output = postPattern.ReplaceAllString(output, colorText("in", white))
+	output = crdNameRegex.ReplaceAllString(output, fmt.Sprintf("%s", underlineText("$1")))
+	output = strings.Replace(output, "/", "", 1)
+	output = strings.Replace(output, "/", ".", 2)
+	return output
+}
+
+func main() {
+	loader := openapi3.NewLoader()
+	loader.IsExternalRefsAllowed = true
+	base := flag.String("base", "", "Version of the first CRD to compare")
+	revision := flag.String("revision", "", "Version of the second CRD to compare")
+	//format := flag.Bool("f", false, "Apply filtering to the output and output only breaking changes")
 	flag.Parse()
 
-	if base != "" && revision != "" {
-		_, err := version.NewVersion(base)
-		if err != nil {
-			return "", "", err
-		}
-		_, err = version.NewVersion(revision)
-		if err != nil {
-			return "", "", err
-		}
-	} else {
-		cmd := exec.Command("git", "for-each-ref", `--format='%(refname)'`, "refs/tags")
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			return "", "", err
-		}
-
-		base, revision = findTags(string(out))
+	if *base == "" || *revision == "" {
+		log.Fatal("Both versions (-base, -revision) must be provided")
 	}
 
-	return base, revision, nil
-}
-
-func findTags(tags string) (string, string) {
-	tags = strings.ReplaceAll(tags, "'", "")
-	tags = strings.ReplaceAll(tags, "refs/tags/v", "")
-	tagList := strings.Split(tags, "\n")
-
-	revision := tagList[len(tagList)-1]
-	base := tagList[len(tagList)-2]
-
-	return base, revision
-}
-
-func downloadBundleYAML(v string) (string, error) {
-	helmVersion, _ := version.NewVersion(helmChartVersion)
-	vv, _ := version.NewVersion(v) // versions already validated, so ignore error
-
-	if vv.GreaterThanOrEqual(helmVersion) {
-		cmd := exec.Command("bash", "-c", fmt.Sprintf(helmInstall, v, v))
-		_, err := cmd.CombinedOutput()
-		if err != nil {
-			return "", err
-		}
-		return fmt.Sprintf(bundleFileName, v), nil
-	}
-
-	resp, err := http.Get(fmt.Sprintf(bundleDownloadLink, v))
+	rawBaseCrd, err := generateCRDFile(*base)
 	if err != nil {
-		return "", err
+		log.Fatalf("Failed to generate first CRD file: %v", err)
 	}
 
-	f, err := os.Create(fmt.Sprintf(bundleFileName, v))
+	rawRevisionCrd, err := generateCRDFile(*revision)
 	if err != nil {
-		return "", err
+		log.Fatalf("Failed to generate second CRD file: %v", err)
 	}
 
-	_, err = io.Copy(f, resp.Body)
+	baseCrd, err := extractCRDs(rawBaseCrd)
 	if err != nil {
-		return "", err
+		log.Fatalf("Failed to extract CRDs from first file: %v", err)
 	}
 
-	return f.Name(), nil
-}
-
-func createOpenAPISpec(yaml string) (string, error) {
-	cmd := exec.Command("bash", "-c", fmt.Sprintf(descriptionDeleter, yaml, yaml))
-	_, err := cmd.CombinedOutput()
+	revisionCrd, err := extractCRDs(rawRevisionCrd)
 	if err != nil {
-		return "", err
+		log.Fatalf("Failed to extract CRDs from second file: %v", err)
 	}
 
-	cmd = exec.Command("bash", "-c", fmt.Sprintf(crdNamesSelector, fmt.Sprintf(descriptionlessFileName, yaml)))
-	o1, err := cmd.CombinedOutput()
+	baseOpenAPISpec := createOpenAPIBundle(baseCrd)
+	revisionOpenAPISpec := createOpenAPIBundle(revisionCrd)
+
+	baseFile := fmt.Sprintf("%s.yaml", *base)
+	if err := writeOpenAPIBundle(baseFile, baseOpenAPISpec); err != nil {
+		log.Fatalf("Failed to write first OpenAPI bundle: %v", err)
+	}
+
+	revisionFile := fmt.Sprintf("%s.yaml", *revision)
+	if err := writeOpenAPIBundle(revisionFile, revisionOpenAPISpec); err != nil {
+		log.Fatalf("Failed to write second OpenAPI bundle: %v", err)
+	}
+	b, err := load.NewSpecInfo(loader, load.NewSource(baseFile))
+	r, err := load.NewSpecInfo(loader, load.NewSource(revisionFile))
+	diffRes, operationsSources, err := diff.GetPathsDiff(diff.NewConfig(),
+		[]*load.SpecInfo{b},
+		[]*load.SpecInfo{r},
+	)
 	if err != nil {
-		return "", err
+		log.Fatalf("diff failed with %v", os.Stderr)
+		return
 	}
-
-	cmd = exec.Command("bash", "-c", fmt.Sprintf(schemaSelector, fmt.Sprintf(descriptionlessFileName, yaml)))
-	o2, err := cmd.CombinedOutput()
+	errs := checker.CheckBackwardCompatibility(checker.GetDefaultChecks(), diffRes, operationsSources)
+	errs, err = checker.ProcessIgnoredBackwardCompatibilityErrors(checker.WARN, errs, "ignore-err.txt", checker.NewDefaultLocalizer())
 	if err != nil {
-		return "", err
+		log.Fatalf("ignore errors failed with %v", os.Stderr)
+		return
 	}
 
-	crdNames := strings.Split(string(o1), schemaSplitter)
-	for i := range crdNames {
-		crdNames[i] = strings.ReplaceAll(crdNames[i], "\n", "")
-	}
-
-	schemas := strings.Split(string(o2), schemaSplitter)
-	for i := range schemas {
-		schemas[i] = strings.ReplaceAll(schemas[i], "openAPIV3Schema:\n", "")
-	}
-
-	n, err := mergeCRDNamesAndSchemas(yaml, crdNames, schemas)
-	if err != nil {
-		return "", err
-	}
-
-	return n, nil
-}
-
-func mergeCRDNamesAndSchemas(fileName string, crdNames, schemas []string) (string, error) {
-	var wholeSchema []byte
-	for i := range schemas {
-		s, err := yaml.YAMLToJSON([]byte(schemas[i]))
-		if err != nil {
-			return "", err
-		}
-
-		wholeSchema, err = sjson.SetRawBytes(wholeSchema, crdNames[i], s)
-		if err != nil {
-			return "", err
+	if len(errs) > 0 {
+		localizer := checker.NewDefaultLocalizer()
+		count := errs.GetLevelCount()
+		fmt.Print(localizer("total-errors", len(errs), count[checker.ERR], "error", count[checker.WARN], "warning"))
+		for _, bcerr := range errs {
+			output := bcerr.MultiLineError(localizer, checker.ColorAuto)
+			filteredOutput := filterOutput(output)
+			fmt.Printf("%s\n\n", filteredOutput)
 		}
 	}
-
-	j, err := yaml.YAMLToJSON([]byte(openAPIYAML))
-	if err != nil {
-		return "", err
-	}
-
-	js, err := sjson.SetRawBytes(j, "components.schemas", wholeSchema)
-	if err != nil {
-		return "", err
-	}
-
-	y, err := yaml.JSONToYAML(js)
-	if err != nil {
-		return "", err
-	}
-
-	f, err := os.Create(fmt.Sprintf(openAPIFileName, fileName))
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	_, err = f.WriteString(string(y))
-	if err != nil {
-		return "", err
-	}
-
-	return f.Name(), nil
-}
-
-func compareSpecs(base, rev string) (string, error) {
-	cmd := exec.Command("bash", "-c", fmt.Sprintf(diff, base, rev))
-	_, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", err
-	}
-
-	diffFile, err := formatDiff(base, rev)
-	if err != nil {
-		return "", err
-	}
-	return diffFile, nil
-}
-
-func formatDiff(base, rev string) (string, error) {
-	cmd := exec.Command("bash", "-c", flatten)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", err
-	}
-
-	f, err := os.Create(fmt.Sprintf(outputFileName, base, rev))
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	_, err = f.WriteString(string(output))
-	if err != nil {
-		return "", err
-	}
-
-	return f.Name(), nil
-}
-
-func cleanup() error {
-	wd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	err = filepath.Walk(wd, func(path string, info os.FileInfo, err error) error {
-		if info.IsDir() {
-			return nil
-		}
-		if filepath.Ext(path) == ".yaml" {
-			os.Remove(info.Name())
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	return nil
 }
