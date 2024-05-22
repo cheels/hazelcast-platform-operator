@@ -29,7 +29,7 @@ var (
 )
 
 func init() {
-	helmRepoAdd("operator", "https://hazelcast-charts.s3.amazonaws.com")
+	//helmRepoAdd("operator", "https://hazelcast-charts.s3.amazonaws.com")
 	RepoUpdate()
 }
 
