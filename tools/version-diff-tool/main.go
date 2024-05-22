@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"github.com/getkin/kin-openapi/openapi3"
@@ -98,17 +99,31 @@ func createOpenAPIBundle(crds []CRD) map[string]interface{} {
 
 func generateCRDFile(version string) (string, error) {
 	outputFile := fmt.Sprintf("%s.yaml", version)
-	repoName := os.Getenv("HELM_REPO_NAME")
-	repoURL := os.Getenv("HELM_REPO_URL")
-	addRepoCmd := exec.Command("sh", "-c", fmt.Sprintf("helm repo add %s %s && helm repo update", repoName, repoURL))
+
+	// Add hazelcast repo and update
+	addRepoCmd := exec.Command("sh", "-c", "helm repo add hazelcast https://hazelcast-charts.s3.amazonaws.com && helm repo update")
+	var addRepoOut bytes.Buffer
+	var addRepoErr bytes.Buffer
+	addRepoCmd.Stdout = &addRepoOut
+	addRepoCmd.Stderr = &addRepoErr
+
 	err := addRepoCmd.Run()
 	if err != nil {
-		return "", fmt.Errorf("failed to add and update hazelcast repo: %s", err)
+		return "", fmt.Errorf("failed to add and update hazelcast repo: %v, stderr: %s", err, addRepoErr.String())
 	}
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("helm template %s hazelcast/hazelcast-platform-operator-crds --version=%s > %s", repoName, version, outputFile))
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to generate CRD file for version %s: %v", version, err)
+
+	// Run helm template command
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("helm template operator hazelcast/hazelcast-platform-operator-crds --version=%s > %s", version, outputFile))
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+
+	err = cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate CRD file for version %s: %v, stderr: %s", version, err, stderr.String())
 	}
+
 	return outputFile, nil
 }
 
