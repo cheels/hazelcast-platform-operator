@@ -13,8 +13,7 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version: "1.22.3"
-        cache: true
-        
+        cache-dependency-path: ../../go.sum
         
     - name: Run check for breaking changes
       working-directory: tools/version-diff-tool
