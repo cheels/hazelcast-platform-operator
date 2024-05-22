@@ -12,6 +12,9 @@ import (
 	"github.com/tufin/oasdiff/diff"
 	"github.com/tufin/oasdiff/load"
 	"gopkg.in/yaml.v3"
+	"helm.sh/helm/v3/pkg/cli"
+	"helm.sh/helm/v3/pkg/getter"
+	"helm.sh/helm/v3/pkg/repo"
 	"log"
 	"os"
 	"os/exec"
@@ -23,19 +26,8 @@ var (
 	white = bunt.GhostWhite
 )
 
-func colorText(format string, color colorful.Color, a ...interface{}) string {
-	return bunt.Style(
-		fmt.Sprintf(format, a...),
-		bunt.EachLine(),
-		bunt.Foreground(color),
-	)
-}
-func underlineText(format string, a ...interface{}) string {
-	return bunt.Style(
-		fmt.Sprintf(format, a...),
-		bunt.EachLine(),
-		bunt.Underline(),
-	)
+func init() {
+	helmRepoAdd("operator", "https://hazelcast-charts.s3.amazonaws.com")
 }
 
 type CRD struct {
@@ -63,7 +55,7 @@ type CRD struct {
 	} `yaml:"spec"`
 }
 
-func createOpenAPIBundle(crds []CRD) map[string]interface{} {
+func createOpenAPISpec(crds []CRD) map[string]interface{} {
 	paths := make(map[string]interface{})
 	for _, crd := range crds {
 		path := fmt.Sprintf("/%s.%s", strings.ToLower(crd.Spec.Names.Kind), "hazelcast.com")
@@ -96,20 +88,44 @@ func createOpenAPIBundle(crds []CRD) map[string]interface{} {
 	return map[string]interface{}{"paths": paths}
 }
 
-func generateCRDFile(version string) (string, error) {
-	outputFile := fmt.Sprintf("%s.yaml", version)
-	addRepoCmd := exec.Command("sh", "-c", "helm repo add hazelcast https://hazelcast-charts.s3.amazonaws.com && helm repo update")
-	err := addRepoCmd.Run()
+func helmRepoAdd(repoName, repoURL string) {
+	settings := cli.New()
+	repoFilePath := settings.RepositoryConfig
+	fileContent, _ := os.ReadFile(repoFilePath)
+	var repoFile repo.File
+	err := yaml.Unmarshal(fileContent, &repoFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to add and update hazelcast repo: %v", err)
+		return
 	}
 
+	if repoFile.Has(repoName) {
+		fmt.Printf("repository name (%s) already exists\n", repoName)
+		return
+	}
+
+	repoEntry := &repo.Entry{Name: repoName, URL: repoURL}
+	chartRepo, err := repo.NewChartRepository(repoEntry, getter.All(settings))
+	if err != nil {
+		log.Fatalf("failed to create chart repository: %v", err)
+	}
+	if _, err = chartRepo.DownloadIndexFile(); err != nil {
+		log.Fatalf("looks like %q is not a valid chart repository or cannot be reached: %v", repoURL, err)
+	}
+
+	repoFile.Update(repoEntry)
+	if err = repoFile.WriteFile(repoFilePath, 0644); err != nil {
+		log.Fatalf("failed to write repository file: %v", err)
+	}
+	fmt.Printf("%q has been added to your repositories\n", repoName)
+}
+
+func generateCRDFile(version string) (string, error) {
+	outputFile := fmt.Sprintf("%s.yaml", version)
 	cmd := exec.Command("sh", "-c", fmt.Sprintf("helm template operator hazelcast/hazelcast-platform-operator-crds --version=%s > %s", version, outputFile))
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate CRD file for version %v", err)
 	}
-
 	return outputFile, nil
 }
 
@@ -141,6 +157,22 @@ func writeOpenAPIBundle(outputFile string, openAPISpec map[string]interface{}) e
 	return os.WriteFile(outputFile, data, 0644)
 }
 
+func colorText(format string, color colorful.Color, a ...interface{}) string {
+	return bunt.Style(
+		fmt.Sprintf(format, a...),
+		bunt.EachLine(),
+		bunt.Foreground(color),
+	)
+}
+
+func underlineText(format string, a ...interface{}) string {
+	return bunt.Style(
+		fmt.Sprintf(format, a...),
+		bunt.EachLine(),
+		bunt.Underline(),
+	)
+}
+
 func filterOutput(output string) string {
 	warningMsgPattern := regexp.MustCompile(`This is a warning because.*?change in specification\.`)
 	apiPattern := regexp.MustCompile(`in API`)
@@ -161,7 +193,6 @@ func main() {
 	loader.IsExternalRefsAllowed = true
 	base := flag.String("base", "", "Version of the first CRD to compare")
 	revision := flag.String("revision", "", "Version of the second CRD to compare")
-	//format := flag.Bool("f", false, "Apply filtering to the output and output only breaking changes")
 	flag.Parse()
 
 	if *base == "" || *revision == "" {
@@ -188,8 +219,8 @@ func main() {
 		log.Fatalf("Failed to extract CRDs from second file: %v", err)
 	}
 
-	baseOpenAPISpec := createOpenAPIBundle(baseCrd)
-	revisionOpenAPISpec := createOpenAPIBundle(revisionCrd)
+	baseOpenAPISpec := createOpenAPISpec(baseCrd)
+	revisionOpenAPISpec := createOpenAPISpec(revisionCrd)
 
 	baseFile := fmt.Sprintf("%s.yaml", *base)
 	if err := writeOpenAPIBundle(baseFile, baseOpenAPISpec); err != nil {
@@ -222,7 +253,7 @@ func main() {
 		count := errs.GetLevelCount()
 		fmt.Print(localizer("total-errors", len(errs), count[checker.ERR], "error", count[checker.WARN], "warning"))
 		for _, bcerr := range errs {
-			output := bcerr.MultiLineError(localizer, checker.ColorAuto)
+			output := bcerr.SingleLineError(localizer, checker.ColorAuto)
 			filteredOutput := filterOutput(output)
 			fmt.Printf("%s\n\n", filteredOutput)
 		}
