@@ -8,9 +8,13 @@ import (
 	"github.com/tufin/oasdiff/diff"
 	"github.com/tufin/oasdiff/load"
 	"gopkg.in/yaml.v3"
+	"helm.sh/helm/v3/pkg/action"
+	"helm.sh/helm/v3/pkg/chart/loader"
+	"helm.sh/helm/v3/pkg/cli"
+	"helm.sh/helm/v3/pkg/getter"
+	"helm.sh/helm/v3/pkg/repo"
 	"log"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 )
@@ -73,11 +77,63 @@ func createOpenAPISpec(crds []CRD) map[string]interface{} {
 	return map[string]interface{}{"paths": paths}
 }
 
+func addAndUpdateRepo(settings *cli.EnvSettings, repoName, repoURL string) error {
+	repoEntry := &repo.Entry{
+		Name: repoName,
+		URL:  repoURL,
+	}
+	chartRepo, err := repo.NewChartRepository(repoEntry, getter.All(settings))
+	if err != nil {
+		return fmt.Errorf("failed to create chart repository: %v", err)
+	}
+	if _, err := chartRepo.DownloadIndexFile(); err != nil {
+		return fmt.Errorf("failed to download index file: %v", err)
+	}
+	return nil
+}
+
 func generateCRDFile(version string) (string, error) {
+	settings := cli.New()
+	actionConfig := new(action.Configuration)
+	if err := actionConfig.Init(settings.RESTClientGetter(), settings.Namespace(), os.Getenv("HELM_DRIVER"), nil); err != nil {
+		return "", fmt.Errorf("failed to initialize Helm action configuration: %v", err)
+	}
+
+	repoName := "hazelcast"
+	repoURL := "https://hazelcast-charts.s3.amazonaws.com"
+	crdChartName := "hazelcast-platform-operator-crds"
+
+	if err := addAndUpdateRepo(settings, repoName, repoURL); err != nil {
+		return "", err
+	}
+
+	client := action.NewInstall(actionConfig)
+	client.DryRun = true
+	client.ReleaseName = repoName
+	client.Replace = true
+	client.ClientOnly = true
+	client.IncludeCRDs = true
+	client.Version = version
+
+	chartName := fmt.Sprintf("%s/%s", repoName, crdChartName)
+	chartPath, err := client.ChartPathOptions.LocateChart(chartName, settings)
+	if err != nil {
+		return "", fmt.Errorf("failed to locate chart: %v", err)
+	}
+
+	chart, err := loader.Load(chartPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to load chart: %v", err)
+	}
+
+	release, err := client.Run(chart, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to render chart: %v", err)
+	}
+
 	outputFile := fmt.Sprintf("%s.yaml", version)
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("helm template hazelcast hazelcast/hazelcast-platform-operator-crds --version=%s > %s", version, outputFile))
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to generate CRD file for version %s: %v", version, err)
+	if err := os.WriteFile(outputFile, []byte(release.Manifest), 0644); err != nil {
+		return "", fmt.Errorf("failed to write CRD file to %s: %v", outputFile, err)
 	}
 	return outputFile, nil
 }
@@ -181,11 +237,11 @@ func main() {
 	}
 	errs := checker.CheckBackwardCompatibility(checker.GetDefaultChecks(), diffRes, operationsSources)
 	if len(errs) > 0 || len(errs) == 0 {
-		localizer := checker.NewDefaultLocalizer()
+		localization := checker.NewDefaultLocalizer()
 		count := errs.GetLevelCount()
-		result := fmt.Sprintf(localizer("total-errors", len(errs), count[checker.ERR], "error", count[checker.WARN], "warning"))
-		for _, bcerr := range errs {
-			output := bcerr.MultiLineError(localizer, checker.ColorAlways)
+		result := fmt.Sprintf(localization("total-errors", len(errs), count[checker.ERR], "error", count[checker.WARN], "warning"))
+		for _, bc := range errs {
+			output := bc.MultiLineError(localization, checker.ColorAlways)
 			filteredOutput := filterOutput(output)
 			result += fmt.Sprintf("\n%s\n", filteredOutput)
 		}
