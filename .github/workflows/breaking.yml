@@ -23,6 +23,15 @@ jobs:
           LATEST_SNAPSHOT=$(curl -s https://artifacthub.io/api/v1/packages/helm/hazelcast/hazelcast-platform-operator | jq -r '.version')
           RESULT=$(go run main.go -base 5.6 -revision 5.7)
           echo "$RESULT" | grep -q "0 breaking changes" || { echo "$RESULT"; exit 1; }
+
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
           
 
 
