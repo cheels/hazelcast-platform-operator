@@ -17,7 +17,7 @@ jobs:
     - name: Build tool
       working-directory: tools/version-diff-tool
       run: |
-        go build -o diff main.go
+        CGO_ENABLED=0 go build -o diff main.go
         
     - name: Run check for breaking changes
       working-directory: tools/version-diff-tool
