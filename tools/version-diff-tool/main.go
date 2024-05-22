@@ -5,9 +5,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/fatih/color"
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/gonvenience/bunt"
-	"github.com/lucasb-eyer/go-colorful"
 	"github.com/tufin/oasdiff/checker"
 	"github.com/tufin/oasdiff/diff"
 	"github.com/tufin/oasdiff/load"
@@ -20,23 +19,9 @@ import (
 )
 
 var (
-	white = bunt.GhostWhite
+	white         = color.New(color.FgHiWhite).SprintFunc()
+	underlineBold = color.New(color.Underline, color.Bold).SprintFunc()
 )
-
-func colorText(format string, color colorful.Color, a ...interface{}) string {
-	return bunt.Style(
-		fmt.Sprintf(format, a...),
-		bunt.EachLine(),
-		bunt.Foreground(color),
-	)
-}
-func underlineText(format string, a ...interface{}) string {
-	return bunt.Style(
-		fmt.Sprintf(format, a...),
-		bunt.EachLine(),
-		bunt.Underline(),
-	)
-}
 
 type CRD struct {
 	APIVersion string `yaml:"apiVersion"`
@@ -141,8 +126,8 @@ func filterOutput(output string) string {
 
 	output = warningMsgPattern.ReplaceAllString(output, "")
 	output = apiPattern.ReplaceAllString(output, "")
-	output = postPattern.ReplaceAllString(output, colorText("in", white))
-	output = crdNameRegex.ReplaceAllString(output, fmt.Sprintf("%s", underlineText("$1")))
+	output = postPattern.ReplaceAllString(output, white("in"))
+	output = crdNameRegex.ReplaceAllString(output, underlineBold("$1"))
 	output = strings.Replace(output, "/", "", 1)
 	output = strings.Replace(output, "/", ".", 2)
 	return output
@@ -220,6 +205,7 @@ func main() {
 		outputLog := fmt.Sprintf(localizer("total-errors", len(errs), count[checker.ERR], "error", count[checker.WARN], "warning"))
 		for _, bcerr := range errs {
 			output := bcerr.MultiLineError(localizer, checker.ColorAuto)
+			color.NoColor = false
 			filteredOutput := filterOutput(output)
 			outputLog += fmt.Sprintf("%s\n\n", filteredOutput)
 			fmt.Printf("%s\n\n", filteredOutput)
@@ -230,4 +216,3 @@ func main() {
 		}
 	}
 }
-
