@@ -21,9 +21,9 @@ jobs:
     - name: Run check for breaking changes
       working-directory: tools/version-diff-tool
       run: |
-        helm repo add operator https://hazelcast-charts.s3.amazonaws.com && helm repo update
-        BASE="5.6"  # Set your base version here or pass it as an input
-        REVISION="5.7"  # Set your revision version here or pass it as an input
+        helm repo add operator https://hazelcast-charts.s3.amazonaws.com && helm repo update &&
+        BASE="5.7"  
+        REVISION="5.8"  
         OUTPUT=$(go run main.go -base $BASE -revision $REVISION)
 
         # Check for "0 breaking changes"
@@ -31,4 +31,5 @@ jobs:
           echo "No breaking changes found."
         else
           echo $OUTPUT
+          exit 1
         fi
