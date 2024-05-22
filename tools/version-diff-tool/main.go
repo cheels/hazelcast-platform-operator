@@ -10,7 +10,6 @@ import (
 	"github.com/lucasb-eyer/go-colorful"
 	"github.com/tufin/oasdiff/checker"
 	"github.com/tufin/oasdiff/diff"
-	"github.com/tufin/oasdiff/formatters"
 	"github.com/tufin/oasdiff/load"
 	"gopkg.in/yaml.v3"
 	"log"
@@ -23,9 +22,6 @@ import (
 var (
 	white = bunt.GhostWhite
 )
-var gitHubFormatter = formatters.GitHubActionsFormatter{
-	Localizer: checker.NewDefaultLocalizer(),
-}
 
 func colorText(format string, color colorful.Color, a ...interface{}) string {
 	return bunt.Style(
@@ -215,17 +211,20 @@ func main() {
 		return
 	}
 	errs := checker.CheckBackwardCompatibility(checker.GetDefaultChecks(), diffRes, operationsSources)
-	/*	errs, err = checker.ProcessIgnoredBackwardCompatibilityErrors(checker.WARN, errs, "ignore-err.txt", checker.NewDefaultLocalizer())
-		if err != nil {
-			log.Fatalf("ignore errors failed with %v", os.Stderr)
-			return
-		}*/
-	output, err := gitHubFormatter.RenderBreakingChanges(errs, formatters.NewRenderOpts())
+	errs, err = checker.ProcessIgnoredBackwardCompatibilityErrors(checker.WARN, errs, "ignore-err.txt", checker.NewDefaultLocalizer())
+	if err != nil {
+		log.Fatalf("ignore errors failed with %v", os.Stderr)
+		return
+	}
+
 	if len(errs) > 0 {
 		localizer := checker.NewDefaultLocalizer()
 		count := errs.GetLevelCount()
 		fmt.Print(localizer("total-errors", len(errs), count[checker.ERR], "error", count[checker.WARN], "warning"))
-
-		fmt.Printf("%s\n\n", output)
+		for _, bcerr := range errs {
+			output := bcerr.MultiLineError(localizer, checker.ColorAuto)
+			filteredOutput := filterOutput(output)
+			fmt.Printf("%s\n\n", filteredOutput)
+		}
 	}
 }
