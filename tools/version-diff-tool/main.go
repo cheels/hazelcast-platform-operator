@@ -98,7 +98,14 @@ func createOpenAPIBundle(crds []CRD) map[string]interface{} {
 
 func generateCRDFile(version string) (string, error) {
 	outputFile := fmt.Sprintf("%s.yaml", version)
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("helm template operator hazelcast/hazelcast-platform-operator-crds --version=%s > %s", version, outputFile))
+	repoName := os.Getenv("HELM_REPO_NAME")
+	repoURL := os.Getenv("HELM_REPO_URL")
+	addRepoCmd := exec.Command("sh", "-c", fmt.Sprintf("helm repo add %s %s && helm repo update", repoName, repoURL))
+	err := addRepoCmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("failed to add and update hazelcast repo: %s", err)
+	}
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("helm template %s hazelcast/hazelcast-platform-operator-crds --version=%s > %s", repoName, version, outputFile))
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to generate CRD file for version %s: %v", version, err)
 	}
