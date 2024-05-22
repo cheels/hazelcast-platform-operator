@@ -217,13 +217,6 @@ func main() {
 			output := bcerr.SingleLineError(localizer, checker.ColorAuto)
 			filteredOutput := filterOutput(output)
 			fmt.Printf("%s\n\n", filteredOutput)
-			err := writeToFile("output.txt",fmt.Sprintf("%s\n\n", filteredOutput))
-			if err != nil {
-				return 
-			}
 		}
 	}
-}
-func writeToFile(filename, content string) error {
-	return os.WriteFile(filename, []byte(content), 0644)
 }
