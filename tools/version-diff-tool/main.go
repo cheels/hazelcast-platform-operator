@@ -148,6 +148,10 @@ func filterOutput(output string) string {
 	return output
 }
 
+func writeToFile(filename, content string) error {
+	return os.WriteFile(filename, []byte(content), 0644)
+}
+
 func main() {
 	loader := openapi3.NewLoader()
 	loader.IsExternalRefsAllowed = true
@@ -213,10 +217,17 @@ func main() {
 		localizer := checker.NewDefaultLocalizer()
 		count := errs.GetLevelCount()
 		fmt.Print(localizer("total-errors", len(errs), count[checker.ERR], "error", count[checker.WARN], "warning"))
+		outputLog := fmt.Sprintf(localizer("total-errors", len(errs), count[checker.ERR], "error", count[checker.WARN], "warning"))
 		for _, bcerr := range errs {
-			output := bcerr.SingleLineError(localizer, checker.ColorAuto)
+			output := bcerr.MultiLineError(localizer, checker.ColorAuto)
 			filteredOutput := filterOutput(output)
+			outputLog += fmt.Sprintf("%s\n\n", filteredOutput)
 			fmt.Printf("%s\n\n", filteredOutput)
+		}
+		err := writeToFile("output.log", outputLog)
+		if err != nil {
+			log.Fatalf("Failed to write output to file: %v", err)
 		}
 	}
 }
+
