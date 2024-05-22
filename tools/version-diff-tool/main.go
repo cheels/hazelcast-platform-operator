@@ -195,14 +195,13 @@ func main() {
 	if len(errs) > 0 {
 		localizer := checker.NewDefaultLocalizer()
 		count := errs.GetLevelCount()
-		fmt.Print(localizer("total-errors", len(errs), count[checker.ERR], "error", count[checker.WARN], "warning"))
 		outputLog := fmt.Sprintf(localizer("total-errors", len(errs), count[checker.ERR], "error", count[checker.WARN], "warning"))
 		for _, bcerr := range errs {
-			output := bcerr.MultiLineError(localizer, checker.ColorAuto)
+			output := bcerr.MultiLineError(localizer, checker.ColorAlways)
 			filteredOutput := filterOutput(output)
-			outputLog += fmt.Sprintf("%s\n\n", filteredOutput)
-			fmt.Printf("%s\n\n", filteredOutput)
+			outputLog += fmt.Sprintf("%s\n", filteredOutput)
 		}
+		fmt.Printf("%s\n", outputLog)
 		err := writeToFile("output.log", outputLog)
 		if err != nil {
 			log.Fatalf("Failed to write output to file: %v", err)
