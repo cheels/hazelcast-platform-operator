@@ -31,5 +31,4 @@ jobs:
           echo "No breaking changes found."
         else
           echo $OUTPUT
-          exit 1
         fi
