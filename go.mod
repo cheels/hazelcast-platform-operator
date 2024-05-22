@@ -131,6 +131,7 @@ require (
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/wI2L/jsondiff v0.5.2 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
+	github.com/yuin/goldmark v1.7.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.opencensus.io v0.24.0 // indirect
