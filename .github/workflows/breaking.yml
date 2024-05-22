@@ -30,6 +30,6 @@ jobs:
         if echo "$OUTPUT" | grep -q "0 breaking changes"; then
           echo "No breaking changes found."
         else
-          cat output.txt
+          cat 5.7.yaml
           exit 1
         fi
