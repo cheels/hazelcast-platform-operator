@@ -21,10 +21,11 @@ jobs:
     - name: Run check for breaking changes
       working-directory: tools/version-diff-tool
       run: |
-        helm repo add operator https://hazelcast-charts.s3.amazonaws.com && helm repo update &&
-
+        helm repo add operator https://hazelcast-charts.s3.amazonaws.com && helm repo update && \
         BASE="5.7"  
         REVISION="5.8"  
+        helm template operator hazelcast/hazelcast-platform-operator-crds --version=$BASE > $BASE.yaml
+        helm template operator hazelcast/hazelcast-platform-operator-crds --version=$REVISION > $REVISION.yaml
         OUTPUT=$(go run main.go -base $BASE -revision $REVISION)
 
         # Check for "0 breaking changes"
